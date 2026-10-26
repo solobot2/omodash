@@ -11,5 +11,6 @@ data class NowPlayingState(
     // preferred over the (often downscaled) metadata bitmap
     val artUri: String? = null,
     val isPlaying: Boolean,
-    val controller: MediaController?
+    val controller: MediaController?,
+    val playbackAction: PlaybackAction = PlaybackAction.DISABLED
 )

@@ -47,6 +47,8 @@ fun SettingsScreen(
     accent: Color,
     onUpdate: (AppSettings.() -> AppSettings) -> Unit,
     onReset: () -> Unit,
+    onAssignCarPlay: () -> Unit,
+    onAssignAndroidAuto: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -234,6 +236,50 @@ fun SettingsScreen(
                     }
                 }
             )
+        }
+
+        SettingsSection("Phone integration") {
+            val carPlayLabel = remember(settings.carPlayPackage) {
+                selectedAppLabel(context, settings.carPlayPackage)
+            }
+            val androidAutoLabel = remember(settings.androidAutoPackage) {
+                selectedAppLabel(context, settings.androidAutoPackage)
+            }
+            SettingsButton(
+                label = "CarPlay app",
+                sublabel = "$carPlayLabel · Tap to choose or change",
+                icon = Icons.Default.PhoneAndroid,
+                accent = accent,
+                onClick = onAssignCarPlay
+            )
+            if (settings.carPlayPackage.isNotEmpty()) {
+                SettingsDivider()
+                SettingsButton(
+                    label = "Clear CarPlay app",
+                    sublabel = "Remove the shortcut assignment",
+                    icon = Icons.Default.Clear,
+                    accent = accent,
+                    onClick = { onUpdate { copy(carPlayPackage = "") } }
+                )
+            }
+            SettingsDivider()
+            SettingsButton(
+                label = "Android Auto app",
+                sublabel = "$androidAutoLabel · Tap to choose or change",
+                icon = Icons.Default.DirectionsCar,
+                accent = accent,
+                onClick = onAssignAndroidAuto
+            )
+            if (settings.androidAutoPackage.isNotEmpty()) {
+                SettingsDivider()
+                SettingsButton(
+                    label = "Clear Android Auto app",
+                    sublabel = "Remove the shortcut assignment",
+                    icon = Icons.Default.Clear,
+                    accent = accent,
+                    onClick = { onUpdate { copy(androidAutoPackage = "") } }
+                )
+            }
         }
 
         // ── Vehicle Name ─────────────────────────────────────────────────────
@@ -747,16 +793,7 @@ fun SettingsScreen(
 
         // ── Updates ──────────────────────────────────────────────────────────
         SettingsSection("Updates") {
-            SettingsButton(
-                label    = "Check for Updates",
-                sublabel = "View releases on GitHub",
-                icon     = Icons.Default.SystemUpdate,
-                accent   = accent,
-                onClick  = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/dw2lam/openlauncher/releases"))
-                    context.startActivity(intent)
-                }
-            )
+            com.openlauncher.app.update.UpdateSettingsPanel()
         }
 
         // ── Maintenance ──────────────────────────────────────────────────────
@@ -778,7 +815,7 @@ fun SettingsScreen(
         Spacer(Modifier.height(32.dp))
 
         Text(
-            text          = "v0.0.5  ·  Made by David Lam  ·  2026",
+            text          = "v${com.openlauncher.app.BuildConfig.VERSION_NAME}  ·  Made by David Lam  ·  2026",
             color         = if (isDayMode) Color(0xFFAAAAAA) else Color(0xFF2A2A2A),
             fontSize      = 10.sp,
             letterSpacing = 1.sp,
@@ -852,6 +889,14 @@ fun SettingsScreen(
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+private fun selectedAppLabel(context: android.content.Context, packageName: String): String {
+    if (packageName.isEmpty()) return "Not assigned"
+    return runCatching {
+        val pm = context.packageManager
+        pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
+    }.getOrElse { "$packageName (not installed)" }
+}
 
 @Composable
 private fun SettingsSection(

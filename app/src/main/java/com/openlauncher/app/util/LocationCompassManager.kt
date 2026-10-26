@@ -126,6 +126,8 @@ class LocationCompassManager(context: Context) {
                     locationListener.onLocationChanged(it)
                 }
             }
+        } catch (_: SecurityException) {
+            // Location permission may be denied or revoked while the app is open.
         } catch (_: Exception) {}
 
         // Network Provider (Works online, cell/wifi-based)
@@ -138,6 +140,8 @@ class LocationCompassManager(context: Context) {
                     locationListener.onLocationChanged(it)
                 }
             }
+        } catch (_: SecurityException) {
+            // Location permission may be denied or revoked while the app is open.
         } catch (_: Exception) {}
     }
 

@@ -8,6 +8,7 @@ import android.media.session.PlaybackState
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.openlauncher.app.model.NowPlayingState
+import com.openlauncher.app.model.playbackActionFor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -107,7 +108,9 @@ class MediaListenerService : NotificationListenerService() {
         val artUri = meta?.getString(MediaMetadata.METADATA_KEY_ART_URI)
             ?: meta?.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
             ?: meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)
-        val isPlaying = controller.playbackState?.state == PlaybackState.STATE_PLAYING
+        val playbackState = controller.playbackState
+        val isPlaying = playbackState?.state == PlaybackState.STATE_PLAYING
+        val playbackAction = playbackActionFor(playbackState?.state, playbackState?.actions ?: 0L)
 
         // Skip redundant emissions: metadata bitmaps parcel into fresh instances on
         // every read, so a plain data-class compare would never match and every
@@ -116,7 +119,7 @@ class MediaListenerService : NotificationListenerService() {
         if (prev != null &&
             prev.controller?.sessionToken == controller.sessionToken &&
             prev.title == title && prev.artist == artist &&
-            prev.isPlaying == isPlaying && prev.artUri == artUri &&
+            prev.isPlaying == isPlaying && prev.playbackAction == playbackAction && prev.artUri == artUri &&
             (prev.albumArt != null) == (art != null)
         ) return
 
@@ -126,7 +129,8 @@ class MediaListenerService : NotificationListenerService() {
             albumArt   = art,
             artUri     = artUri,
             isPlaying  = isPlaying,
-            controller = controller
+            controller = controller,
+            playbackAction = playbackAction
         )
     }
 

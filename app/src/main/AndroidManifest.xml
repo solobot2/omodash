@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Network for weather API -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
     <!-- Broadcast permission for MCU head unit event service -->
     <uses-permission android:name="com.szchoiceway.permission.broadcast" />
@@ -18,8 +21,7 @@
     <!-- Compass / sensors -->
     <uses-permission android:name="android.permission.BODY_SENSORS" />
 
-    <!-- Media session control (requires notification access grant by user) -->
-    <uses-permission android:name="android.permission.MEDIA_CONTENT_CONTROL" />
+    <!-- Media session access is granted through the user-enabled notification listener. -->
 
     <!-- Wallpaper from gallery -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
@@ -27,10 +29,16 @@
         android:maxSdkVersion="32" />
 
     <!-- Query all packages required on API 30+ for getInstalledApplications -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- This launcher intentionally lists all installed apps, including OEM
+         CarPlay companions with no MAIN/LAUNCHER activity. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
 
     <!-- Required on API 30+ so PackageManager returns ALL launcher apps -->
     <queries>
+        <package android:name="com.android.packageinstaller" />
+        <package android:name="com.google.android.packageinstaller" />
+        <package android:name="com.miui.packageinstaller" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -38,11 +46,12 @@
     </queries>
 
     <application
-        android:label="Open Launcher"
+        android:label="${launcherLabel}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="${allowCleartextUpdates}"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
         android:exported="true">
 
@@ -74,6 +83,29 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <service
+            android:name=".update.UpdateAccessibilityService"
+            android:label="@string/update_helper_name"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/update_accessibility_service" />
+        </service>
+
+        <receiver android:name=".update.UpdateInstallReceiver" android:exported="false" />
+        <receiver android:name=".update.UpdateDownloadReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
+        <receiver android:name=".update.UpdateReplacedReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

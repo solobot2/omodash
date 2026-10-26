@@ -417,6 +417,7 @@ fun HomeScreen(
                             onPrev              = onPrev,
                             onLaunchCarPlay     = onLaunchCarPlay,
                             onLaunchAndroidAuto = onLaunchAndroidAuto,
+                            onOpenContextMenu   = { contextMenuId = w.id },
                             onTapToOpenApp      = onTapNowPlaying,
                             modifier            = Modifier.fillMaxSize(),
                             isEditing           = editMode,

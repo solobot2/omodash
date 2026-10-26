@@ -1,7 +1,21 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val appVersion = Properties().apply {
+    rootProject.file("version.properties").inputStream().use { load(it) }
+}
+val signingFile = rootProject.file("keystore/signing.properties")
+val releaseSigning = Properties().apply {
+    if (signingFile.isFile) signingFile.inputStream().use { load(it) }
+}
+val updateTestMode = providers.gradleProperty("updateTestMode").orNull == "true"
+val updateFeedUrl = if (updateTestMode) {
+    providers.gradleProperty("updateFeedUrl").get()
+} else "https://api.github.com/repos/solobot2/omodash/releases/latest"
 
 android {
     namespace  = "com.openlauncher.app"
@@ -13,16 +27,36 @@ android {
         applicationId  = "com.openlauncher.app"
         minSdk         = 21
         targetSdk      = 36
-        versionCode    = 6
-        versionName    = "0.0.5"
+        versionCode    = providers.gradleProperty("releaseCode").orNull?.toInt()
+            ?: appVersion.getProperty("versionCode").toInt()
+        versionName    = providers.gradleProperty("releaseVersion").orNull
+            ?: appVersion.getProperty("versionName")
+        buildConfigField("String", "UPDATE_FEED_URL", "\"${updateFeedUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField("boolean", "UPDATE_TEST_MODE", updateTestMode.toString())
+        manifestPlaceholders["allowCleartextUpdates"] = updateTestMode.toString()
+        manifestPlaceholders["launcherLabel"] = if (updateTestMode) "Omodash Update Test" else "Open Launcher"
+    }
+
+    signingConfigs {
+        if (signingFile.isFile) create("omodashRelease") {
+            storeFile = rootProject.file(releaseSigning.getProperty("storeFile"))
+            storePassword = releaseSigning.getProperty("storePassword")
+            keyAlias = releaseSigning.getProperty("keyAlias")
+            keyPassword = releaseSigning.getProperty("keyPassword")
+        }
     }
 
     buildTypes {
         debug {
-            // Default signing config for normal device testing (restores app visibility)
+            applicationIdSuffix = if (updateTestMode) ".updatetest.debug" else ".debug"
+            versionNameSuffix = "-debug"
+            manifestPlaceholders["launcherLabel"] = "Open Launcher Debug"
         }
         release {
-            isMinifyEnabled = false
+            if (updateTestMode) applicationIdSuffix = ".updatetest"
+            if (signingFile.isFile) signingConfig = signingConfigs.getByName("omodashRelease")
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -37,7 +71,19 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+}
+
+tasks.register("verifyReleaseSigning") {
+    doLast {
+        check(signingFile.isFile) {
+            "Release signing is not configured. Run: python3 tools/signing.py"
+        }
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    dependsOn("verifyReleaseSigning")
 }
 
 dependencies {

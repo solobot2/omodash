@@ -28,6 +28,8 @@ import com.openlauncher.app.util.SunriseSunset
 import com.openlauncher.app.model.AppInfo
 import com.openlauncher.app.model.NavDestination
 import com.openlauncher.app.model.NowPlayingState
+import com.openlauncher.app.model.PlaybackAction
+import com.openlauncher.app.model.playbackActionFor
 import com.openlauncher.app.model.WeatherState
 import com.openlauncher.app.service.MediaListenerService
 import com.openlauncher.app.util.LocationCompassManager
@@ -356,11 +358,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun playPause() { nowPlaying.value?.controller?.also { ctrl ->
-        val state = ctrl.playbackState?.state
-        if (state == android.media.session.PlaybackState.STATE_PLAYING)
-            ctrl.transportControls?.pause()
-        else
-            ctrl.transportControls?.play()
+        val state = ctrl.playbackState
+        // Radio sources often support Stop but not Pause. Use the live session
+        // capabilities so the visible control can actually silence the source.
+        when (playbackActionFor(state?.state, state?.actions ?: 0L)) {
+            PlaybackAction.PLAY -> ctrl.transportControls.play()
+            PlaybackAction.PAUSE -> ctrl.transportControls.pause()
+            PlaybackAction.STOP -> ctrl.transportControls.stop()
+            PlaybackAction.DISABLED -> Unit
+        }
     }}
 
     fun skipNext() { nowPlaying.value?.controller?.transportControls?.skipToNext() }

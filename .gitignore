@@ -9,11 +9,19 @@
 release/*.apk
 release/*.zip
 release/*.aab
+release/v*/
 
 # Signing keys — never commit
 *.jks
 *.keystore
+*.p12
+*.pfx
 keystore/
+signing.properties
+.release-work/
+.release-local/
+__pycache__/
+*.pyc
 
 # Android Studio / IntelliJ IDEA
 .idea/

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Radio
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openlauncher.app.model.NowPlayingState
+import com.openlauncher.app.model.PlaybackAction
 import com.openlauncher.app.service.MediaListenerService
 import kotlin.math.abs
 import kotlinx.coroutines.delay
@@ -57,6 +59,7 @@ fun NowPlayingWidget(
     onLaunchCarPlay: () -> Unit,
     onLaunchAndroidAuto: () -> Unit,
     onTapToOpenApp: () -> Unit,
+    onOpenContextMenu: () -> Unit,
     modifier: Modifier = Modifier,
     isEditing: Boolean = false,
     isDayMode: Boolean = false,
@@ -132,6 +135,7 @@ fun NowPlayingWidget(
                 onLaunchCarPlay = onLaunchCarPlay,
                 onLaunchAndroidAuto = onLaunchAndroidAuto,
                 onTapToOpenApp = onTapToOpenApp,
+                onOpenContextMenu = onOpenContextMenu,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -511,6 +515,7 @@ private fun RadioFlatButton(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun StandardMinimalPlayer(
     state: NowPlayingState?,
     accent: Color,
@@ -526,6 +531,7 @@ private fun StandardMinimalPlayer(
     onLaunchCarPlay: () -> Unit,
     onLaunchAndroidAuto: () -> Unit,
     onTapToOpenApp: () -> Unit,
+    onOpenContextMenu: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -554,7 +560,12 @@ private fun StandardMinimalPlayer(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .let { if (!isEditing) it.clickable { onLaunchCarPlay() } else it }
+                                    .let {
+                                        if (!isEditing) it.combinedClickable(
+                                            onClick = onLaunchCarPlay,
+                                            onLongClick = onOpenContextMenu
+                                        ) else it
+                                    }
                             ) {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -577,7 +588,12 @@ private fun StandardMinimalPlayer(
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .let { if (!isEditing) it.clickable { onLaunchAndroidAuto() } else it }
+                                    .let {
+                                        if (!isEditing) it.combinedClickable(
+                                            onClick = onLaunchAndroidAuto,
+                                            onLongClick = onOpenContextMenu
+                                        ) else it
+                                    }
                             ) {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -712,10 +728,22 @@ private fun StandardMinimalPlayer(
                                 .clip(CircleShape)
                                 .background(currentPlayBgColor)
                         ) {
-                            IconButton(onClick = { if (!isEditing) onPlayPause() }, modifier = Modifier.size(42.dp)) {
+                            IconButton(
+                                onClick = onPlayPause,
+                                enabled = !isEditing && nonNullState.playbackAction != PlaybackAction.DISABLED,
+                                modifier = Modifier.size(42.dp)
+                            ) {
                                 Icon(
-                                    imageVector = if (nonNullState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = if (nonNullState.isPlaying) "Pause" else "Play",
+                                    imageVector = when (nonNullState.playbackAction) {
+                                        PlaybackAction.PAUSE -> Icons.Default.Pause
+                                        PlaybackAction.STOP -> Icons.Default.Stop
+                                        else -> Icons.Default.PlayArrow
+                                    },
+                                    contentDescription = when (nonNullState.playbackAction) {
+                                        PlaybackAction.PAUSE -> "Pause"
+                                        PlaybackAction.STOP -> "Stop"
+                                        else -> "Play"
+                                    },
                                     tint = currentPlayIconColor,
                                     modifier = Modifier.size(22.dp)
                                 )
