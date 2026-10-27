@@ -1,6 +1,8 @@
 package com.openlauncher.app.ui.theme
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -11,6 +13,23 @@ import androidx.compose.ui.graphics.luminance
 import com.openlauncher.app.data.AppFont
 
 val LocalDayMode = staticCompositionLocalOf { false }
+
+@Composable
+fun outlinedControlColors() = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+
+@Composable
+fun textControlColors() = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+
+@Composable
+fun filledControlColors(): androidx.compose.material3.ButtonColors {
+    val scheme = MaterialTheme.colorScheme
+    val high = maxOf(scheme.primary.luminance(), scheme.surface.luminance())
+    val low = minOf(scheme.primary.luminance(), scheme.surface.luminance())
+    val container = if ((high + 0.05f) / (low + 0.05f) >= 3f) scheme.primary
+        else if (scheme.surface.luminance() < 0.5f) Color.White else Color.Black
+    val content = if (container.luminance() > 0.179f) Color.Black else Color.White
+    return ButtonDefaults.buttonColors(containerColor = container, contentColor = content)
+}
 
 @Composable
 fun OpenLauncherTheme(
@@ -58,7 +77,9 @@ fun OpenLauncherTheme(
         MaterialTheme(
             colorScheme = colorScheme,
             typography  = launcherTypography(fontBold, textScale, appFont.toFontFamily()),
-            content     = content
+            content = {
+                CompositionLocalProvider(LocalContentColor provides colorScheme.onBackground, content = content)
+            }
         )
     }
 }

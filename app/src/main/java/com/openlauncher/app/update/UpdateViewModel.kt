@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.openlauncher.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,21 +34,51 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     private val _state = MutableStateFlow(UpdateUiState())
     val state: StateFlow<UpdateUiState> = _state
     private var foreground = false
+    private var windowFocused = false
+    private var pollJob: Job? = null
+    private var permissionsLoaded = false
+    private var permissionSetupRequested = false
     private var busy = false
     private var message = "Check for a newer version on GitHub"
 
-    init {
-        viewModelScope.launch {
+    fun setForeground(value: Boolean) {
+        if (foreground == value) return
+        foreground = value
+        updatePolling()
+    }
+
+    fun setWindowFocused(value: Boolean) {
+        if (windowFocused == value) return
+        windowFocused = value
+        updatePolling()
+    }
+
+    fun permissionSetupStarted() { permissionSetupRequested = true }
+
+    fun recheckPermissions() {
+        viewModelScope.launch { refresh(checkPermissions = true) }
+    }
+
+    private fun updatePolling() {
+        pollJob?.cancel()
+        if (!foreground || !windowFocused) return
+        pollJob = viewModelScope.launch {
+            if (!busy) refresh(checkPermissions = !permissionsLoaded || permissionSetupRequested)
             while (isActive) {
-                if (!busy && foreground) refresh()
-                delay(750)
+                delay(1_000)
+                // No PackageManager/AppOps/DownloadManager polling when idle or in the background.
+                if (!busy && (_state.value.downloading || _state.value.installing)) refresh()
             }
         }
     }
 
-    fun setForeground(value: Boolean) { foreground = value }
-
-    private suspend fun refresh() {
+    private suspend fun refresh(checkPermissions: Boolean = false) {
+        // Latch before IPC: an OEM permission popup can steal focus and cancel this job.
+        // Regaining focus must not immediately repeat the query and create a popup loop.
+        if (checkPermissions) {
+            permissionsLoaded = true
+            permissionSetupRequested = false
+        }
         val snapshot = withContext(Dispatchers.IO) {
             store.clearFinishedUpdate()
             // An abandoned or timed-out installer must not leave the UI stuck forever.
@@ -62,13 +93,16 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 candidate = store.candidate?.takeIf { it.versionCode > installed.first },
                 downloading = download.running, progress = download.percent,
                 ready = store.verified, installing = store.sessionId >= 0,
-                canInstall = UpdateInstaller.canInstall(app),
-                accessibilityEnabled = UpdateAccessibilityService.isEnabled(app),
+                canInstall = if (checkPermissions) UpdateInstaller.canInstall(app) else _state.value.canInstall,
+                accessibilityEnabled = if (checkPermissions) UpdateAccessibilityService.isEnabled(app) else _state.value.accessibilityEnabled,
                 autoConfirm = store.autoConfirm, message = message, error = store.error
             )
         }
+        if (checkPermissions) {
+            com.openlauncher.app.diagnostics.DiagnosticLog.event("UpdateSetup", "Permission check: install=${snapshot.canInstall}, helper=${snapshot.accessibilityEnabled}")
+        }
         _state.value = snapshot
-        if (!foreground) return
+        if (!foreground || !windowFocused) return
         if (store.confirmationIntent != null) {
             runCatching { UpdateInstaller.launchConfirmation(app) }.onFailure {
                 UpdateInstaller.abandon(app)
@@ -114,7 +148,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 store.error = error.message ?: "Could not check for updates"
             } finally {
                 busy = false
-                refresh()
+                refresh(checkPermissions = true)
             }
         }
     }
@@ -125,7 +159,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         busy = true
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { UpdateDownloads.start(app, candidate) }
+                withContext(Dispatchers.IO) { UpdateDownloads.start(app, candidate, installWhenReady = _state.value.canInstall) }
                 message = "Downloading ${candidate.versionName}"
             } catch (error: Exception) {
                 store.error = error.message ?: "Cannot start the download"

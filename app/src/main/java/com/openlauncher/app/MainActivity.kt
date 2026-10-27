@@ -52,11 +52,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        com.openlauncher.app.diagnostics.DiagnosticLog.event("Window", "focus=$hasFocus")
         if (hasFocus) hideSystemBars()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.openlauncher.app.util.LauncherExit.restoreComponents(this)
         hideSystemBars()
 
         setContent {
@@ -296,17 +298,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.openlauncher.app.diagnostics.DiagnosticLog.event("Activity", "Resumed")
         vm.refreshConnectivity()
         vm.refreshMedia()
     }
 
     override fun onStop() {
         super.onStop()
+        com.openlauncher.app.diagnostics.DiagnosticLog.event("Activity", "Stopped")
         vm.stopLocationUpdates()
     }
 
     override fun onStart() {
         super.onStart()
+        com.openlauncher.app.diagnostics.DiagnosticLog.event("Activity", "Started")
         vm.startLocationUpdates()
     }
 }

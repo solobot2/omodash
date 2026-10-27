@@ -58,6 +58,7 @@ object DiagnosticReport {
             catch (error: Exception) { errors.append("$name: ${error.javaClass.simpleName}: ${error.message}\n") }
         }
         source("device.json") { deviceInfo(context, systemLogs).toString(2) }
+        source("performance.json") { PerformanceTrace.snapshot(context).toString(2) }
         try { entries.putAll(DiagnosticLog.snapshot()) }
         catch (error: Exception) { errors.append("Persistent journal: $error\n") }
         source("logcat-app.txt") { logcat(listOf("--pid=${Process.myPid()}")) }
@@ -97,18 +98,20 @@ object DiagnosticReport {
             .put("fingerprint", Build.FINGERPRINT)
             .put("display", "${display.widthPixels}x${display.heightPixels}, density=${display.density}, fontScale=${context.resources.configuration.fontScale}")
             .put("notificationAccessGranted", MediaAccess.isGranted(context))
+            .put("secureSettingsPermission", com.openlauncher.app.util.DevicePermissionSetup.canWriteSecureSettings(context))
             .put("mediaListenerConnected", MediaListenerService.isConnected.value)
             .put("overlayPermission", Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(context))
             .put("canInstallPackages", Build.VERSION.SDK_INT < 26 || pm.canRequestPackageInstalls())
             .put("systemLogsPermission", hasSystemLogs(context)).put("systemLogsIncluded", systemLogs)
+            .put("downloadProvider", pm.resolveContentProvider("downloads", 0)?.packageName ?: JSONObject.NULL)
         val permissions = JSONObject()
         listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION,
-            "android.permission.MEDIA_CONTENT_CONTROL", Manifest.permission.READ_LOGS).forEach {
+            "android.permission.MEDIA_CONTENT_CONTROL", Manifest.permission.READ_LOGS, Manifest.permission.WRITE_SECURE_SETTINGS).forEach {
             permissions.put(it, context.checkCallingOrSelfPermission(it) == PackageManager.PERMISSION_GRANTED)
         }
         result.put("permissions", permissions)
         val actions = listOf("android.settings.NOTIFICATION_LISTENER_DETAIL_SETTINGS", "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS",
-            Settings.ACTION_ACCESSIBILITY_SETTINGS, Settings.ACTION_SETTINGS)
+            Settings.ACTION_ACCESSIBILITY_SETTINGS, Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Settings.ACTION_SETTINGS)
         result.put("settingsActivities", JSONObject().apply {
             actions.forEach { action ->
                 put(action, JSONArray(pm.queryIntentActivities(Intent(action), PackageManager.MATCH_DEFAULT_ONLY).map {
@@ -130,7 +133,7 @@ object DiagnosticReport {
         // Never fall back to an unfiltered dump for the app-only file, even on privileged devices.
         if (Build.VERSION.SDK_INT < 24 && extra.isNotEmpty()) return "Process-filtered logcat requires Android 7+. See the persistent launcher journal and crash files.\n"
         val args = extra
-        val process = ProcessBuilder(listOf("logcat", "-d", "-v", "threadtime", "-t", "1500") + args)
+        val process = ProcessBuilder(listOf("logcat", "-d", "-v", "threadtime", "-t", if (extra.isEmpty()) "6000" else "1500") + args)
             .redirectErrorStream(true).start()
         val reader = FutureTask {
             val text = StringBuilder()
@@ -139,8 +142,9 @@ object DiagnosticReport {
                 while (true) {
                     val n = input.read(buffer)
                     if (n < 0) break
-                    val available = 512 * 1024 - text.length
-                    if (available > 0) text.append(buffer, 0, minOf(n, available))
+                    text.append(buffer, 0, n)
+                    val limit = if (extra.isEmpty()) 1024 * 1024 else 512 * 1024
+                    if (text.length > limit) text.delete(0, text.length - limit)
                 }
             }
             val output = text.toString()

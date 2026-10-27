@@ -7,5 +7,6 @@ class LauncherApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         DiagnosticLog.initialize(this)
+        com.openlauncher.app.diagnostics.PerformanceTrace.start(this)
     }
 }

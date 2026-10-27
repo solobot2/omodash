@@ -38,6 +38,7 @@ android {
             ?: appVersion.getProperty("versionName")
         buildConfigField("String", "UPDATE_FEED_URL", "\"${updateFeedUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("boolean", "UPDATE_TEST_MODE", updateTestMode.toString())
+        buildConfigField("boolean", "INTERNAL_DOWNLOAD_TEST", (updateTestMode && providers.gradleProperty("internalDownloadTest").orNull == "true").toString())
         buildConfigField("String", "REPORT_EMAIL", "\"${diagnosticsConfig.getProperty("email", "").replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         manifestPlaceholders["allowCleartextUpdates"] = updateTestMode.toString()
         manifestPlaceholders["launcherLabel"] = if (updateTestMode) "Omodash Update Test" else "Open Launcher"
@@ -98,6 +99,7 @@ dependencies {
 
     // Core
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("com.tananaev:adblib:1.3")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")

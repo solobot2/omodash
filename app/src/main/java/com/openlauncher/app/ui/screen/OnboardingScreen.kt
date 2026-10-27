@@ -68,6 +68,9 @@ fun OnboardingScreen(
         mediaGranted = com.openlauncher.app.util.MediaAccess.isGranted(context)
     }
 
+    val listenerConnected by com.openlauncher.app.service.MediaListenerService.isConnected.collectAsState()
+    LaunchedEffect(listenerConnected) { checkPermissions() }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -208,6 +211,7 @@ fun OnboardingScreen(
                             })
                             2 -> MediaStep(accent, mediaGranted, onGrant = {
                                 mediaAccessError = com.openlauncher.app.util.MediaAccess.openSettings(context)
+                                mediaGranted = com.openlauncher.app.util.MediaAccess.isGranted(context)
                             })
                             3 -> FinalStep(accent, onSetDefault = {
                                 runCatching {

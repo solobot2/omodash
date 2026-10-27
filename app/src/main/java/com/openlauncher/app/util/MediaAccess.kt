@@ -39,15 +39,10 @@ object MediaAccess {
             add(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
         }
         for (intent in candidates) {
-            try {
-                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                DiagnosticLog.event("MediaAccess", "Opened ${intent.action}")
-                return null
-            } catch (error: Exception) {
-                DiagnosticLog.event("MediaAccess", "Cannot open ${intent.action}", error)
-            }
+            if (DevicePermissionSetup.openSystemScreen(context, intent, "MediaAccess")) return null
         }
-        return "This firmware cannot open Android's notification access screen. Media access has not been changed. " +
-            "Create a diagnostic report so we can inspect the available settings. A vehicle-specific permission tool may be needed."
+        if (isGranted(context)) return null
+        if (DevicePermissionSetup.enableNotificationListener(context)) return null
+        return "This firmware has no notification access screen. " + DevicePermissionSetup.INSTRUCTIONS
     }
 }

@@ -28,7 +28,9 @@ class DiagnosticIntegrationTest {
                 throw ActivityNotFoundException("OEM test: no notification settings")
             }
         }
-        assertNotNull(MediaAccess.openSettings(unavailable))
+        val alreadyGranted = MediaAccess.isGranted(app)
+        val result = MediaAccess.openSettings(unavailable)
+        if (alreadyGranted) assertNull(result) else assertNotNull(result)
         assertEquals(if (Build.VERSION.SDK_INT >= 30) 2 else 1, actions.size)
         assertEquals("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS", actions.last())
         assertTrue(DiagnosticLog.snapshot().values.any { it.contains("OEM test: no notification settings") })

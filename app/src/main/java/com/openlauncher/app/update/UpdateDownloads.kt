@@ -13,15 +13,19 @@ internal object UpdateDownloads {
     private val completionExecutor = Executors.newSingleThreadExecutor()
 
     @Synchronized
-    fun start(context: Context, info: UpdateInfo) {
+    fun start(context: Context, info: UpdateInfo, installWhenReady: Boolean = true) {
         val store = UpdateStore(context)
         cancel(context)
         store.candidate = info
         store.error = null
         store.verified = false
-        store.installRequested = true
+        store.installRequested = installWhenReady
         val file = store.apkFile()
         check(!file.exists() || file.delete()) { "Cannot replace the previous download" }
+        if (com.openlauncher.app.BuildConfig.INTERNAL_DOWNLOAD_TEST || context.packageManager.resolveContentProvider("downloads", 0) == null) {
+            AppUpdateDownload.start(context, info)
+            return
+        }
         val request = DownloadManager.Request(Uri.parse(info.apkUrl))
             .setTitle("Open Launcher ${info.versionName}")
             .setDescription("Downloading launcher update")
@@ -30,12 +34,17 @@ internal object UpdateDownloads {
             .setDestinationUri(Uri.fromFile(file))
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(false)
-        store.downloadId = manager(context).enqueue(request)
+        try { store.downloadId = manager(context).enqueue(request) }
+        catch (error: Exception) {
+            com.openlauncher.app.diagnostics.DiagnosticLog.event("UpdateDownload", "DownloadManager unavailable; using app downloader", error)
+            AppUpdateDownload.start(context, info)
+        }
     }
 
     @Synchronized
     fun cancel(context: Context) {
         val store = UpdateStore(context)
+        AppUpdateDownload.cancel()
         if (store.downloadId >= 0) manager(context).remove(store.downloadId)
         if (store.candidate != null) runCatching { store.apkFile().delete() }
         store.downloadId = -1
@@ -48,6 +57,7 @@ internal object UpdateDownloads {
     fun refresh(context: Context): DownloadProgress {
         val store = UpdateStore(context)
         val id = store.downloadId
+        if (id == AppUpdateDownload.DOWNLOAD_ID && !store.verified && store.error == null) return AppUpdateDownload.progress(context)
         if (id < 0 || store.verified || store.error != null) return DownloadProgress()
         manager(context).query(DownloadManager.Query().setFilterById(id))?.use { cursor ->
             if (!cursor.moveToFirst()) {

@@ -9,6 +9,9 @@
     <!-- Optional diagnostics: this can only be granted by a privileged device tool / ADB,
          never by a normal runtime permission prompt. The app works without it. -->
     <uses-permission android:name="android.permission.READ_LOGS" tools:ignore="ProtectedPermissions" />
+    <!-- Optional one-time grant via JCarTools/ADB on OEM firmware without permission screens.
+         Used only after the user presses Media access / Enable update helper. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 

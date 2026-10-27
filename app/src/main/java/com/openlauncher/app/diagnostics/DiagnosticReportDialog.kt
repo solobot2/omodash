@@ -20,6 +20,7 @@ fun DiagnosticReportDialog(onDismiss: () -> Unit, vm: DiagnosticViewModel = view
     var description by rememberSaveable { mutableStateOf("") }
     var includeSystem by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf(vm.recipient) }
+    var recording by remember { mutableStateOf(false) }
     val canReadSystem = remember { DiagnosticReport.hasSystemLogs(context) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -48,12 +49,15 @@ fun DiagnosticReportDialog(onDismiss: () -> Unit, vm: DiagnosticViewModel = view
                 state.report?.let { file ->
                     Text(file.name, style = MaterialTheme.typography.bodySmall)
                 }
-                if (Build.VERSION.SDK_INT >= 29) OutlinedButton(onClick = { vm.save(description, includeSystem) }, enabled = !state.busy) { Text("Save ZIP to Downloads") }
+                if (Build.VERSION.SDK_INT >= 29) OutlinedButton(colors = com.openlauncher.app.ui.theme.outlinedControlColors(), onClick = { vm.save(description, includeSystem) }, enabled = !state.busy) { Text("Save ZIP to Downloads") }
+                OutlinedButton(colors = com.openlauncher.app.ui.theme.outlinedControlColors(), onClick = { PerformanceTrace.start(context); recording = true }, enabled = !state.busy) { Text("Record performance for 2 minutes") }
+                if (recording) Text("Recording continues with this dialog closed. Reproduce the issue, then send a new ZIP.")
             }
         },
         confirmButton = {
-            Button(onClick = { vm.send(description, includeSystem, email) }, enabled = !state.busy) { Text("Send report / Gmail") }
+            Button(onClick = { vm.send(description, includeSystem, email) }, enabled = !state.busy,
+                colors = com.openlauncher.app.ui.theme.filledControlColors()) { Text("Send report / Gmail") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+        dismissButton = { TextButton(colors = com.openlauncher.app.ui.theme.textControlColors(), onClick = onDismiss) { Text("Close") } }
     )
 }

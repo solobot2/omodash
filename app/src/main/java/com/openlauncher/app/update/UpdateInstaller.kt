@@ -10,7 +10,9 @@ import android.os.Build
 import com.openlauncher.app.MainActivity
 
 internal object UpdateInstaller {
-    fun canInstall(context: Context): Boolean = Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()
+    fun canInstall(context: Context): Boolean = Build.VERSION.SDK_INT < 26 || runCatching {
+        context.packageManager.canRequestPackageInstalls()
+    }.onFailure { com.openlauncher.app.diagnostics.DiagnosticLog.event("UpdateSetup", "Cannot check app installation access", it) }.getOrDefault(false)
 
     /** Must run on an IO dispatcher; recheck the APK immediately before staging it. */
     fun stage(context: Context) {

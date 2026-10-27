@@ -133,6 +133,10 @@ Deploy собирает подписанный APK, проверяет подп�
 
 ## Проверки разработки
 
+На OEM-прошивке без Download Provider (authority `downloads`) используется собственная HTTPS загрузка с теми же проверками размера, SHA-256, версии, пакета и сертификата. Этот запасной загрузчик не создаёт аудиопотоков или уведомлений. Если Android завершит его процесс, загрузка повторится при следующем открытии Updates; сохранённый частичный файл не устанавливается. При наличии DownloadManager сохраняется прежняя фоновая загрузка.
+
+Для проверки запасного загрузчика в изолированном `updateTestMode` доступен `-PinternalDownloadTest=true`. В обычном APK этот флаг всегда false.
+
 ```sh
 python3 -m unittest discover -s tools/tests -v
 ./gradlew :app:assembleDebug :app:assembleRelease

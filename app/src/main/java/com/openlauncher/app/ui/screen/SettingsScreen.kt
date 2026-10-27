@@ -59,6 +59,8 @@ fun SettingsScreen(
     var showFontColorPicker   by remember { mutableStateOf(false) }
     var mediaAccessError by remember { mutableStateOf<String?>(null) }
     var showDiagnosticReport by remember { mutableStateOf(false) }
+    var showStopDialog by remember { mutableStateOf(false) }
+    var stopError by remember { mutableStateOf<String?>(null) }
 
     // OpenDocument (not GetContent): only SAF document URIs carry a persistable
     // grant, so this is what actually keeps the wallpaper readable after reboot
@@ -113,6 +115,8 @@ fun SettingsScreen(
 
         // ── Permissions ──────────────────────────────────────────────────────
         SettingsSection("Permissions") {
+            com.openlauncher.app.ui.components.VehiclePermissionSetupPanel()
+            SettingsDivider()
             val isMediaConnected by com.openlauncher.app.service.MediaListenerService.isConnected.collectAsState()
 
             // Bumped on ON_RESUME so statuses refresh when the user returns from
@@ -809,6 +813,14 @@ fun SettingsScreen(
 
         // ── Maintenance ──────────────────────────────────────────────────────
         SettingsSection("Maintenance") {
+            SettingsButton(
+                label = "Stop launcher process",
+                sublabel = "Return to the factory Home screen and stop this launcher's process",
+                icon = Icons.Default.PowerSettingsNew,
+                accent = accent,
+                onClick = { showStopDialog = true }
+            )
+            stopError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Spacer(Modifier.height(8.dp))
             Button(
                 onClick  = { showResetDialog = true },
@@ -826,8 +838,8 @@ fun SettingsScreen(
         Spacer(Modifier.height(32.dp))
 
         Text(
-            text          = "v${com.openlauncher.app.BuildConfig.VERSION_NAME}  ·  Made by David Lam  ·  2026",
-            color         = if (isDayMode) Color(0xFFAAAAAA) else Color(0xFF2A2A2A),
+            text          = "v${com.openlauncher.app.BuildConfig.VERSION_NAME}  ·  Made by SolobotWin  ·  2026",
+            color         = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize      = 10.sp,
             letterSpacing = 1.sp,
             modifier      = Modifier
@@ -838,6 +850,17 @@ fun SettingsScreen(
     } // end Box
 
     // ── Dialogs ──────────────────────────────────────────────────────────────
+    if (showStopDialog) {
+        ConfirmDialog(
+            title = "Stop launcher process",
+            message = "Open another Home app and stop Open Launcher? Downloads and sharing may be interrupted. " +
+                "Our background services will stay off until you open the launcher again. " +
+                "Android may start the launcher again when you press Home if it is still the default Home app.",
+            confirmLabel = "Stop launcher",
+            onConfirm = { showStopDialog = false; stopError = com.openlauncher.app.util.LauncherExit.stop(context) },
+            onDismiss = { showStopDialog = false }
+        )
+    }
     mediaAccessError?.let { message ->
         com.openlauncher.app.ui.components.MediaAccessErrorDialog(message,
             onDismiss = { mediaAccessError = null },
@@ -922,7 +945,7 @@ private fun SettingsSection(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val isDayMode     = LocalDayMode.current
-    val sectionColor  = if (isDayMode) Color(0xFF888888) else Color(0xFF3A3A3A)
+    val sectionColor  = MaterialTheme.colorScheme.onSurfaceVariant
     val dividerColor  = if (isDayMode) Color(0xFFCCCCCC) else Color(0xFF1E1E1E)
     Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
         Text(
@@ -947,7 +970,7 @@ private fun SettingsRow(
 ) {
     val isDayMode   = LocalDayMode.current
     val labelColor  = if (isDayMode) Color(0xFF111111) else Color(0xFFDDDDDD)
-    val subColor    = if (isDayMode) Color(0xFF888888) else Color(0xFF444444)
+    val subColor    = MaterialTheme.colorScheme.onSurfaceVariant
     val iconTint    = if (isDayMode) Color(0xFF777777) else MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
     Row(
         modifier = Modifier
@@ -976,7 +999,7 @@ private fun ColumnScope.SettingsButton(
 ) {
     val isDayMode  = LocalDayMode.current
     val labelColor = if (isDayMode) Color(0xFF111111) else Color(0xFFDDDDDD)
-    val subColor   = if (isDayMode) Color(0xFF888888) else Color(0xFF444444)
+    val subColor   = MaterialTheme.colorScheme.onSurfaceVariant
     val chevronC   = if (isDayMode) Color(0xFFBBBBBB) else Color(0xFF2A2A2A)
     val iconTint   = if (isDayMode) Color(0xFF777777) else MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
     Row(
