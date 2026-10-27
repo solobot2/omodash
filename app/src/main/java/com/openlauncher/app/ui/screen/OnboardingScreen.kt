@@ -48,6 +48,15 @@ fun OnboardingScreen(
     var currentStep by rememberSaveable { mutableStateOf(0) }
     var locationGranted by remember { mutableStateOf(false) }
     var mediaGranted by remember { mutableStateOf(false) }
+    var mediaAccessError by remember { mutableStateOf<String?>(null) }
+    var showDiagnosticReport by remember { mutableStateOf(false) }
+
+    mediaAccessError?.let { message ->
+        com.openlauncher.app.ui.components.MediaAccessErrorDialog(message,
+            onDismiss = { mediaAccessError = null },
+            onReport = { mediaAccessError = null; showDiagnosticReport = true })
+    }
+    if (showDiagnosticReport) com.openlauncher.app.diagnostics.DiagnosticReportDialog(onDismiss = { showDiagnosticReport = false })
 
     val checkPermissions = {
         locationGranted = ContextCompat.checkSelfPermission(
@@ -56,10 +65,7 @@ fun OnboardingScreen(
             context, Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
-        val enabledListeners = Settings.Secure.getString(
-            context.contentResolver, "enabled_notification_listeners"
-        )
-        mediaGranted = enabledListeners != null && enabledListeners.contains(context.packageName)
+        mediaGranted = com.openlauncher.app.util.MediaAccess.isGranted(context)
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -201,9 +207,7 @@ fun OnboardingScreen(
                                 )
                             })
                             2 -> MediaStep(accent, mediaGranted, onGrant = {
-                                runCatching {
-                                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                                }
+                                mediaAccessError = com.openlauncher.app.util.MediaAccess.openSettings(context)
                             })
                             3 -> FinalStep(accent, onSetDefault = {
                                 runCatching {

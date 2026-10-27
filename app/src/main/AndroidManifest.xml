@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Optional diagnostics: this can only be granted by a privileged device tool / ADB,
+         never by a normal runtime permission prompt. The app works without it. -->
+    <uses-permission android:name="android.permission.READ_LOGS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
@@ -46,6 +49,7 @@
     </queries>
 
     <application
+        android:name=".LauncherApplication"
         android:label="${launcherLabel}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -54,6 +58,14 @@
         android:usesCleartextTraffic="${allowCleartextUpdates}"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
         android:exported="true">
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.diagnostics"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/diagnostic_file_paths" />
+        </provider>
 
         <!-- Single launcher activity -->
         <activity

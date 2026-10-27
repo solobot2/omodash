@@ -228,7 +228,7 @@ def deploy(args):
                 run("git", "commit", "-m", f"Release v{version} ({code})")
         run(sys.executable, "-m", "unittest", "discover", "-s", "tools/tests", "-v")
         run(str(ROOT / "gradlew"), "--project-cache-dir", str(ROOT / ".release-work/gradle-cache"),
-            ":app:lintRelease", ":app:assembleRelease", f"-PreleaseVersion={version}",
+            ":app:testReleaseUnitTest", ":app:lintRelease", ":app:assembleRelease", f"-PreleaseVersion={version}",
             f"-PreleaseCode={code}", env=java_env())
         out = prepare_assets(version, code)
         if args.dry_run:

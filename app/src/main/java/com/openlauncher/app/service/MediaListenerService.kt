@@ -9,6 +9,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.openlauncher.app.model.NowPlayingState
 import com.openlauncher.app.model.playbackActionFor
+import com.openlauncher.app.diagnostics.DiagnosticLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -26,6 +27,7 @@ class MediaListenerService : NotificationListenerService() {
         super.onListenerConnected()
         instance = this
         isConnected.value = true
+        DiagnosticLog.event("Media", "Notification listener connected")
         refreshNowPlaying()
     }
 
@@ -33,6 +35,7 @@ class MediaListenerService : NotificationListenerService() {
         super.onListenerDisconnected()
         instance = null
         isConnected.value = false
+        DiagnosticLog.event("Media", "Notification listener disconnected")
         clearController()
         _nowPlaying.value = null
     }
@@ -42,6 +45,7 @@ class MediaListenerService : NotificationListenerService() {
 
     override fun onDestroy() {
         instance = null
+        isConnected.value = false
         clearController()
         // Clear the static flow so the UI doesn't keep showing a dead session
         // (and pinning its album-art bitmap) after the service is killed
@@ -58,7 +62,8 @@ class MediaListenerService : NotificationListenerService() {
         val msm = getSystemService(MEDIA_SESSION_SERVICE) as? MediaSessionManager ?: return
         val sessions: List<MediaController> = try {
             msm.getActiveSessions(ComponentName(this, MediaListenerService::class.java))
-        } catch (_: SecurityException) {
+        } catch (error: SecurityException) {
+            DiagnosticLog.event("Media", "Cannot query active media sessions", error)
             emptyList()
         }
 
@@ -77,6 +82,7 @@ class MediaListenerService : NotificationListenerService() {
         if (active.sessionToken != activeController?.sessionToken) {
             clearController()
             activeController = active
+            DiagnosticLog.event("Media", "Selected session ${active.packageName}, state=${active.playbackState?.state}, actions=${active.playbackState?.actions}")
             active.registerCallback(
                 controllerCallback,
                 android.os.Handler(android.os.Looper.getMainLooper())

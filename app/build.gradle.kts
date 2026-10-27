@@ -13,6 +13,10 @@ val releaseSigning = Properties().apply {
     if (signingFile.isFile) signingFile.inputStream().use { load(it) }
 }
 val updateTestMode = providers.gradleProperty("updateTestMode").orNull == "true"
+val diagnosticsConfig = Properties().apply {
+    val file = rootProject.file("diagnostics.properties")
+    if (file.isFile) file.inputStream().use { load(it) }
+}
 val updateFeedUrl = if (updateTestMode) {
     providers.gradleProperty("updateFeedUrl").get()
 } else "https://api.github.com/repos/solobot2/omodash/releases/latest"
@@ -27,12 +31,14 @@ android {
         applicationId  = "com.openlauncher.app"
         minSdk         = 21
         targetSdk      = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode    = providers.gradleProperty("releaseCode").orNull?.toInt()
             ?: appVersion.getProperty("versionCode").toInt()
         versionName    = providers.gradleProperty("releaseVersion").orNull
             ?: appVersion.getProperty("versionName")
         buildConfigField("String", "UPDATE_FEED_URL", "\"${updateFeedUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         buildConfigField("boolean", "UPDATE_TEST_MODE", updateTestMode.toString())
+        buildConfigField("String", "REPORT_EMAIL", "\"${diagnosticsConfig.getProperty("email", "").replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         manifestPlaceholders["allowCleartextUpdates"] = updateTestMode.toString()
         manifestPlaceholders["launcherLabel"] = if (updateTestMode) "Omodash Update Test" else "Open Launcher"
     }
@@ -125,4 +131,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.13.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

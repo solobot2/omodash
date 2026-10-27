@@ -136,6 +136,9 @@ Deploy собирает подписанный APK, проверяет подп�
 ```sh
 python3 -m unittest discover -s tools/tests -v
 ./gradlew :app:assembleDebug :app:assembleRelease
+./gradlew :app:testDebugUnitTest
+# На отдельном тестовом эмуляторе:
+ANDROID_SERIAL=emulator-5556 ./gradlew :app:connectedDebugAndroidTest
 ```
 
 Для испытания A → B без изменения основного установленного пакета предусмотрен

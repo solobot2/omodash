@@ -24,7 +24,10 @@ internal class UpdateStore(context: Context) {
         set(value) { prefs.edit().putBoolean("install_requested", value).commit() }
     var error: String?
         get() = prefs.getString("error", null)
-        set(value) { prefs.edit().putString("error", value).commit() }
+        set(value) {
+            if (value != null && value != error) com.openlauncher.app.diagnostics.DiagnosticLog.event("Update", value)
+            prefs.edit().putString("error", value).commit()
+        }
     var autoConfirm: Boolean
         get() = prefs.getBoolean("auto_confirm", true)
         set(value) { prefs.edit().putBoolean("auto_confirm", value).commit() }

@@ -57,6 +57,8 @@ fun SettingsScreen(
     var showBgPicker          by remember { mutableStateOf(false) }
     var showGradientEndPicker by remember { mutableStateOf(false) }
     var showFontColorPicker   by remember { mutableStateOf(false) }
+    var mediaAccessError by remember { mutableStateOf<String?>(null) }
+    var showDiagnosticReport by remember { mutableStateOf(false) }
 
     // OpenDocument (not GetContent): only SAF document URIs carry a persistable
     // grant, so this is what actually keeps the wallpaper readable after reboot
@@ -98,6 +100,16 @@ fun SettingsScreen(
         )
 
         Spacer(Modifier.height(4.dp))
+
+        SettingsSection("Diagnostics") {
+            SettingsButton(
+                label = "Report a problem",
+                sublabel = "Collect launcher logs, crashes and device information into a ZIP",
+                icon = Icons.Default.BugReport,
+                accent = accent,
+                onClick = { showDiagnosticReport = true }
+            )
+        }
 
         // ── Permissions ──────────────────────────────────────────────────────
         SettingsSection("Permissions") {
@@ -180,15 +192,14 @@ fun SettingsScreen(
             )
             SettingsDivider()
             SettingsButton(
-                label    = "Notification Access",
-                sublabel = if (isMediaConnected) "Granted — media controls active" else "Required for Now Playing widget",
+                label    = "Media access",
+                sublabel = if (isMediaConnected) "Connected — media controls active"
+                    else if (com.openlauncher.app.util.MediaAccess.isGranted(context)) "Allowed — waiting for media listener"
+                    else "Give permission to read track information and control playback",
                 icon     = if (isMediaConnected) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff,
                 accent   = if (isMediaConnected) accent else Color(0xFF993333),
                 onClick  = {
-                    context.startActivity(
-                        Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    )
+                    mediaAccessError = com.openlauncher.app.util.MediaAccess.openSettings(context)
                 }
             )
             SettingsDivider()
@@ -827,6 +838,13 @@ fun SettingsScreen(
     } // end Box
 
     // ── Dialogs ──────────────────────────────────────────────────────────────
+    mediaAccessError?.let { message ->
+        com.openlauncher.app.ui.components.MediaAccessErrorDialog(message,
+            onDismiss = { mediaAccessError = null },
+            onReport = { mediaAccessError = null; showDiagnosticReport = true })
+    }
+    if (showDiagnosticReport) com.openlauncher.app.diagnostics.DiagnosticReportDialog(onDismiss = { showDiagnosticReport = false })
+
     if (showResetDialog) {
         ConfirmDialog(
             title        = "Reset Settings",

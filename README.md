@@ -13,6 +13,8 @@
 
 This fork publishes signed APK updates to `solobot2/omodash`. See [release and update instructions](docs/releases.md) for signing-key backup, local builds, GitHub deployment and one-time setup in the vehicle.
 
+For crash reports and ZIP diagnostics sent from the car, see [diagnostic instructions](docs/diagnostics.md).
+
 ## 📖 Table of Contents
 - [Why Build Another Car Launcher?](#-why-build-another-car-launcher)
 - [The Philosophy](#-the-philosophy-offline-first--oem-aesthetics)
