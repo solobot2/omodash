@@ -34,7 +34,7 @@ class DiagnosticFiles(private val directory: File, private val maxBytes: Long = 
     @Synchronized
     fun snapshot(): Map<String, String> = directory.listFiles().orEmpty()
         .filter { it.name == "events.log" || it.name == "events-previous.log" || it.name.startsWith("crash-") }
-        .sortedBy { it.name }.associate { it.name to it.readText().take(256 * 1024) }
+        .sortedBy { it.name }.associate { it.name to it.readText().take(maxBytes.toInt()) }
 
     companion object {
         // Known credential fields occasionally appear in exception URLs / HTTP messages.

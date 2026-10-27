@@ -37,7 +37,6 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     private var windowFocused = false
     private var pollJob: Job? = null
     private var permissionsLoaded = false
-    private var permissionSetupRequested = false
     private var busy = false
     private var message = "Check for a newer version on GitHub"
 
@@ -53,17 +52,11 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         updatePolling()
     }
 
-    fun permissionSetupStarted() { permissionSetupRequested = true }
-
-    fun recheckPermissions() {
-        viewModelScope.launch { refresh(checkPermissions = true) }
-    }
-
     private fun updatePolling() {
         pollJob?.cancel()
         if (!foreground || !windowFocused) return
         pollJob = viewModelScope.launch {
-            if (!busy) refresh(checkPermissions = !permissionsLoaded || permissionSetupRequested)
+            if (!busy) refresh(checkPermissions = !permissionsLoaded)
             while (isActive) {
                 delay(1_000)
                 // No PackageManager/AppOps/DownloadManager polling when idle or in the background.
@@ -77,7 +70,6 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         // Regaining focus must not immediately repeat the query and create a popup loop.
         if (checkPermissions) {
             permissionsLoaded = true
-            permissionSetupRequested = false
         }
         val snapshot = withContext(Dispatchers.IO) {
             store.clearFinishedUpdate()

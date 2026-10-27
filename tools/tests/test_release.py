@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import tempfile
+import zipfile
 
 SPEC = importlib.util.spec_from_file_location("release", Path(__file__).parents[1] / "release.py")
 release = importlib.util.module_from_spec(SPEC)
@@ -8,6 +10,17 @@ SPEC.loader.exec_module(release)
 
 
 class VersionAllocationTests(unittest.TestCase):
+    def test_usb_bundle_has_only_portable_public_tools_and_is_reproducible(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = release.usb_bundle(Path(directory))
+            first = target.read_bytes()
+            self.assertEqual(first, release.usb_bundle(Path(directory)).read_bytes())
+            with zipfile.ZipFile(target) as archive:
+                self.assertEqual(set(archive.namelist()), {
+                    "README.txt", "SHA256SUMS.txt", "tools/vehicle_usb.py", "tools/setup-usb.command",
+                    "tools/setup-usb.cmd", "docs/usb-setup.md"})
+                self.assertEqual(archive.getinfo("tools/setup-usb.command").external_attr >> 16, 0o100755)
+
     def test_first_release_uses_checked_in_version(self):
         self.assertEqual(release.choose_version(None, {"versionName": "0.0.6", "versionCode": "7"}, [], 0), ("0.0.6", 7))
 

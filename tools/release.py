@@ -17,6 +17,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO = "solobot2/omodash"
@@ -135,6 +136,25 @@ def signing_fingerprints(output):
         r"(?m)^.*?certificate SHA-256 digest:\s*([0-9a-fA-F]{64})\s*$", output)}
 
 
+def usb_bundle(out):
+    """Fixed allowlist: never package signing keys, ADB keys, reports or local configuration."""
+    files = {"README.txt": ROOT / "tools/USB-README.txt"}
+    for name in ("tools/vehicle_usb.py", "tools/setup-usb.command", "tools/setup-usb.cmd", "docs/usb-setup.md"):
+        files[name] = ROOT / name
+    payloads = {name: path.read_bytes() for name, path in files.items()}
+    payloads["SHA256SUMS.txt"] = "".join(f"{hashlib.sha256(data).hexdigest()}  {name}\n"
+                                       for name, data in sorted(payloads.items())).encode()
+    target = out / "omodash-usb-tools.zip"
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, data in sorted(payloads.items()):
+            entry = zipfile.ZipInfo(name, (2026, 1, 1, 0, 0, 0))
+            entry.create_system = 3
+            entry.external_attr = (0o100755 if name.endswith((".command", ".py")) else 0o100644) << 16
+            entry.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(entry, data)
+    return target
+
+
 def prepare_assets(version, code):
     metadata = json.loads((ROOT / "app/build/outputs/apk/release/output-metadata.json").read_text())
     element = metadata["elements"][0]
@@ -175,6 +195,9 @@ def prepare_assets(version, code):
     if not mapping.is_file():
         raise RuntimeError("Missing R8 mapping: release optimization did not run")
     shutil.copy2(mapping, out / "mapping.txt")
+    bundle = usb_bundle(out)
+    with (out / "SHA256SUMS.txt").open("a") as checksums:
+        checksums.write(f"{hashlib.sha256(bundle.read_bytes()).hexdigest()}  {bundle.name}\n")
     return out
 
 
@@ -253,7 +276,7 @@ def deploy(args):
             "body": notes, "draft": True, "prerelease": False,
         })
         uploaded = {a["name"]: a for a in release.get("assets", [])}
-        for name in ("omodash.apk", "update.json", "SHA256SUMS.txt", "mapping.txt"):
+        for name in ("omodash.apk", "update.json", "SHA256SUMS.txt", "mapping.txt", "omodash-usb-tools.zip"):
             data = (out / name).read_bytes()
             if name in uploaded:
                 if uploaded[name].get("digest") != "sha256:" + hashlib.sha256(data).hexdigest():

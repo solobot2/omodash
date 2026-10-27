@@ -57,7 +57,6 @@ fun SettingsScreen(
     var showBgPicker          by remember { mutableStateOf(false) }
     var showGradientEndPicker by remember { mutableStateOf(false) }
     var showFontColorPicker   by remember { mutableStateOf(false) }
-    var mediaAccessError by remember { mutableStateOf<String?>(null) }
     var showDiagnosticReport by remember { mutableStateOf(false) }
     var showStopDialog by remember { mutableStateOf(false) }
     var stopError by remember { mutableStateOf<String?>(null) }
@@ -104,9 +103,11 @@ fun SettingsScreen(
         Spacer(Modifier.height(4.dp))
 
         SettingsSection("Diagnostics") {
+            com.openlauncher.app.diagnostics.DiagnosticRecordingPanel()
+            SettingsDivider()
             SettingsButton(
-                label = "Report a problem",
-                sublabel = "Collect launcher logs, crashes and device information into a ZIP",
+                label = "Send / save diagnostic ZIP",
+                sublabel = "Include recorded logs, crashes and device information",
                 icon = Icons.Default.BugReport,
                 accent = accent,
                 onClick = { showDiagnosticReport = true }
@@ -115,8 +116,6 @@ fun SettingsScreen(
 
         // ── Permissions ──────────────────────────────────────────────────────
         SettingsSection("Permissions") {
-            com.openlauncher.app.ui.components.VehiclePermissionSetupPanel()
-            SettingsDivider()
             val isMediaConnected by com.openlauncher.app.service.MediaListenerService.isConnected.collectAsState()
 
             // Bumped on ON_RESUME so statuses refresh when the user returns from
@@ -195,16 +194,14 @@ fun SettingsScreen(
                 }
             )
             SettingsDivider()
-            SettingsButton(
-                label    = "Media access",
-                sublabel = if (isMediaConnected) "Connected — media controls active"
-                    else if (com.openlauncher.app.util.MediaAccess.isGranted(context)) "Allowed — waiting for media listener"
-                    else "Give permission to read track information and control playback",
-                icon     = if (isMediaConnected) Icons.Default.NotificationsActive else Icons.Default.NotificationsOff,
-                accent   = if (isMediaConnected) accent else Color(0xFF993333),
-                onClick  = {
-                    mediaAccessError = com.openlauncher.app.util.MediaAccess.openSettings(context)
-                }
+            val mediaAllowed = remember(permissionRefresh) { com.openlauncher.app.util.MediaAccess.isGranted(context) }
+            Text(
+                text = if (isMediaConnected) "Media access: connected"
+                    else if (mediaAllowed) "Media access: allowed, waiting for connection"
+                    else "Media access: not configured. Run the one-time USB setup on your laptop.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(vertical = 8.dp)
             )
             SettingsDivider()
             SettingsButton(
@@ -815,7 +812,7 @@ fun SettingsScreen(
         SettingsSection("Maintenance") {
             SettingsButton(
                 label = "Stop launcher process",
-                sublabel = "Return to the factory Home screen and stop this launcher's process",
+                sublabel = "Close our tasks and services; Android may reopen a default Home app",
                 icon = Icons.Default.PowerSettingsNew,
                 accent = accent,
                 onClick = { showStopDialog = true }
@@ -860,11 +857,6 @@ fun SettingsScreen(
             onConfirm = { showStopDialog = false; stopError = com.openlauncher.app.util.LauncherExit.stop(context) },
             onDismiss = { showStopDialog = false }
         )
-    }
-    mediaAccessError?.let { message ->
-        com.openlauncher.app.ui.components.MediaAccessErrorDialog(message,
-            onDismiss = { mediaAccessError = null },
-            onReport = { mediaAccessError = null; showDiagnosticReport = true })
     }
     if (showDiagnosticReport) com.openlauncher.app.diagnostics.DiagnosticReportDialog(onDismiss = { showDiagnosticReport = false })
 

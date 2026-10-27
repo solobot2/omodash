@@ -1,14 +1,10 @@
 package com.openlauncher.app.update
 
-import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -17,16 +13,12 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.openlauncher.app.util.DevicePermissionSetup
 
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 fun UpdateSettingsPanel(vm: UpdateViewModel = viewModel()) {
-    val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val state by vm.state.collectAsStateWithLifecycle()
-    var setupMessage by remember { mutableStateOf<String?>(null) }
-    var showReport by remember { mutableStateOf(false) }
     val focused = LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(focused, vm) { vm.setWindowFocused(focused) }
     DisposableEffect(owner, vm) {
@@ -70,18 +62,12 @@ fun UpdateSettingsPanel(vm: UpdateViewModel = viewModel()) {
             }
             if (state.downloading) OutlinedButton(colors = com.openlauncher.app.ui.theme.outlinedControlColors(), onClick = vm::cancelDownload) { Text("Cancel download") }
         }
-        if (!state.canInstall) {
-            Text("One-time setup: allow this launcher to install updates.", fontSize = 12.sp)
-            OutlinedButton(colors = com.openlauncher.app.ui.theme.outlinedControlColors(), onClick = {
-                vm.permissionSetupStarted()
-                val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
-                if (!DevicePermissionSetup.openSystemScreen(context, intent, "UpdateSetup")) {
-                    setupMessage = "This firmware has no working app installation permission screen. " + DevicePermissionSetup.INSTRUCTIONS
-                }
-            }) { Text("Allow app installations") }
-            OutlinedButton(colors = com.openlauncher.app.ui.theme.outlinedControlColors(), onClick = vm::recheckPermissions) { Text("Recheck permissions") }
-            if (state.ready) Text("The APK is downloaded and verified. Installation is waiting for permission.", fontSize = 12.sp)
-        }
+        Text(
+            if (state.canInstall) "Update installation: allowed"
+            else "Update installation: not configured. Run the one-time USB setup on your laptop, then check for updates again.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp
+        )
+        if (state.ready && !state.canInstall) Text("The APK is downloaded and verified. Installation is waiting for USB setup.", fontSize = 12.sp)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Automatically confirm this launcher's updates", fontSize = 13.sp)
@@ -89,25 +75,12 @@ fun UpdateSettingsPanel(vm: UpdateViewModel = viewModel()) {
             }
             Switch(checked = state.autoConfirm, onCheckedChange = vm::setAutoConfirm)
         }
-        if (state.autoConfirm && !state.accessibilityEnabled) {
-            Text(if (android.os.Build.VERSION.SDK_INT >= 31)
-                "Android can install self-updates automatically. If your device still asks for confirmation, enable the update helper or confirm manually."
-                else "Enable Open Launcher Update helper in Accessibility for automatic confirmation. You can also confirm installation manually.", fontSize = 12.sp)
-            OutlinedButton(colors = com.openlauncher.app.ui.theme.outlinedControlColors(), onClick = {
-                vm.permissionSetupStarted()
-                if (DevicePermissionSetup.openSystemScreen(context, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS), "UpdateSetup")) return@OutlinedButton
-                if (DevicePermissionSetup.enableUpdateHelper(context)) vm.recheckPermissions()
-                else setupMessage = "This firmware has no working Accessibility screen. " + DevicePermissionSetup.INSTRUCTIONS
-            }) {
-                Text("Enable update helper")
-            }
-        }
+        if (state.autoConfirm) Text(
+            if (state.accessibilityEnabled) "Automatic confirmation helper: enabled"
+            else if (android.os.Build.VERSION.SDK_INT >= 31) "Android may install self-updates automatically; otherwise confirm in the system window."
+            else "Automatic confirmation helper: not configured. USB setup enables it; manual confirmation is also possible.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp
+        )
         if (state.installing) Text("Complete installation in the system window. If needed, press Home to return to the updated launcher.", fontSize = 12.sp)
     }
-    setupMessage?.let { message ->
-        com.openlauncher.app.ui.components.MediaAccessErrorDialog(message,
-            onDismiss = { setupMessage = null },
-            onReport = { setupMessage = null; showReport = true }, title = "Update permissions")
-    }
-    if (showReport) com.openlauncher.app.diagnostics.DiagnosticReportDialog(onDismiss = { showReport = false })
 }

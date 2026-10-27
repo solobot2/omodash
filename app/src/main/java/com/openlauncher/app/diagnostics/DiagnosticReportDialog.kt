@@ -20,7 +20,6 @@ fun DiagnosticReportDialog(onDismiss: () -> Unit, vm: DiagnosticViewModel = view
     var description by rememberSaveable { mutableStateOf("") }
     var includeSystem by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf(vm.recipient) }
-    var recording by remember { mutableStateOf(false) }
     val canReadSystem = remember { DiagnosticReport.hasSystemLogs(context) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -50,8 +49,6 @@ fun DiagnosticReportDialog(onDismiss: () -> Unit, vm: DiagnosticViewModel = view
                     Text(file.name, style = MaterialTheme.typography.bodySmall)
                 }
                 if (Build.VERSION.SDK_INT >= 29) OutlinedButton(colors = com.openlauncher.app.ui.theme.outlinedControlColors(), onClick = { vm.save(description, includeSystem) }, enabled = !state.busy) { Text("Save ZIP to Downloads") }
-                OutlinedButton(colors = com.openlauncher.app.ui.theme.outlinedControlColors(), onClick = { PerformanceTrace.start(context); recording = true }, enabled = !state.busy) { Text("Record performance for 2 minutes") }
-                if (recording) Text("Recording continues with this dialog closed. Reproduce the issue, then send a new ZIP.")
             }
         },
         confirmButton = {

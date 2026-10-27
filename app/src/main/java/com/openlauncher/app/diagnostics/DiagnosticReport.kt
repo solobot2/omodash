@@ -43,6 +43,8 @@ object DiagnosticReport {
             description.txt: user's description.
             device.json: app/build, display, permission and media session diagnostics.
             events*.log: bounded persistent launcher journal (survives process death).
+            recording.json, recorded-events*.log: optional two-minute manual recording, kept across process death.
+            A recorded system log is attached only when system logs are explicitly selected for this report.
             crash-*.txt: last three uncaught JVM crashes, recorded with the crashing app version.
             logcat-app.txt: recent entries from this process only; previous processes may be absent.
             logcat-system.txt: only included if READ_LOGS was already granted and explicitly selected.
@@ -61,6 +63,8 @@ object DiagnosticReport {
         source("performance.json") { PerformanceTrace.snapshot(context).toString(2) }
         try { entries.putAll(DiagnosticLog.snapshot()) }
         catch (error: Exception) { errors.append("Persistent journal: $error\n") }
+        try { entries.putAll(DiagnosticRecording.snapshot(context, systemLogs)) }
+        catch (error: Exception) { errors.append("Recorded logs: $error\n") }
         source("logcat-app.txt") { logcat(listOf("--pid=${Process.myPid()}")) }
         if (systemLogs) source("logcat-system.txt") { logcat(emptyList()) }
         if (includeSystemLogs && !systemLogs) errors.append("System logs requested but READ_LOGS is not granted.\n")
@@ -100,6 +104,7 @@ object DiagnosticReport {
             .put("notificationAccessGranted", MediaAccess.isGranted(context))
             .put("secureSettingsPermission", com.openlauncher.app.util.DevicePermissionSetup.canWriteSecureSettings(context))
             .put("mediaListenerConnected", MediaListenerService.isConnected.value)
+            .put("updateHelperEnabled", com.openlauncher.app.update.UpdateAccessibilityService.isEnabled(context))
             .put("overlayPermission", Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(context))
             .put("canInstallPackages", Build.VERSION.SDK_INT < 26 || pm.canRequestPackageInstalls())
             .put("systemLogsPermission", hasSystemLogs(context)).put("systemLogsIncluded", systemLogs)

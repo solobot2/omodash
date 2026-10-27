@@ -6,16 +6,17 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import com.openlauncher.app.diagnostics.DiagnosticLog
 import com.openlauncher.app.update.UpdateAccessibilityService
 
 /** Explicit user actions only. Never grants itself privileges or replaces other services. */
 object DevicePermissionSetup {
-    const val INSTRUCTIONS = "On this head unit, open JCarTools → Give permissions to apps, select Open Launcher, " +
-        "then Give all permissions. A working ADB connection in JCarTools is required. " +
-        "Return here and use Configure vehicle permissions for media access, then retry the helper button. " +
-        "Some commands may be rejected; the launcher checks the actual result."
+    const val INSTRUCTIONS = "Run tools/vehicle_usb.py setup once from a laptop connected by USB. " +
+        "Enable USB ADB using your vehicle's key flash drive, then approve the laptop if Android asks. " +
+        "The script configures media access, update installation and the confirmation helper directly."
 
     fun canWriteSecureSettings(context: Context): Boolean =
         context.checkCallingOrSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
@@ -56,6 +57,25 @@ object DevicePermissionSetup {
         }.onFailure { DiagnosticLog.event("UpdateSetup", "Cannot enable own update helper", it) }.getOrDefault(false)
     }
 
+    /** Clear a force-stop/crashed binding for our service only; retain every other enabled service. */
+    fun rebindUpdateHelper(context: Context, onComplete: (Boolean) -> Unit) {
+        if (!canWriteSecureSettings(context) || !enableUpdateHelper(context)) { onComplete(false); return }
+        val own = ComponentName(context, UpdateAccessibilityService::class.java)
+        val key = Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        val handler = Handler(Looper.getMainLooper())
+        // Force-stop may already have removed the setting. Establish ON first so OFF
+        // produces a real observer transition and clears Android's crashed-service state.
+        handler.postDelayed({
+            val removed = runCatching {
+                val entries = Settings.Secure.getString(context.contentResolver, key).orEmpty().split(':')
+                Settings.Secure.putString(context.contentResolver, key,
+                    entries.filter { it.isNotBlank() && ComponentName.unflattenFromString(it) != own }.joinToString(":"))
+            }.getOrDefault(false)
+            if (!removed) onComplete(false)
+            else handler.postDelayed({ onComplete(enableUpdateHelper(context)) }, 750)
+        }, 750)
+    }
+
     private fun addService(context: Context, key: String, component: ComponentName) {
         val previous = Settings.Secure.getString(context.contentResolver, key).orEmpty()
         val entries = previous.split(':').filter { it.isNotBlank() }
@@ -67,10 +87,4 @@ object DevicePermissionSetup {
         DiagnosticLog.event("PermissionSetup", "Enabled own service ${component.className}; retained ${entries.size} existing entries")
     }
 
-    fun openJCarTools(context: Context): String? = runCatching {
-        val intent = context.packageManager.getLaunchIntentForPackage("com.example.navistart")
-            ?: error("JCarTools is not installed or cannot be launched. Open it from the vehicle's app list.")
-        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        null
-    }.getOrElse { it.message ?: "Cannot open JCarTools" }
 }

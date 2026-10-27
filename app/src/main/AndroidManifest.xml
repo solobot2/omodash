@@ -121,6 +121,9 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+        <!-- Explicit USB diagnostics command; shell has DUMP, ordinary apps do not. -->
+        <receiver android:name=".diagnostics.UsbControlReceiver" android:exported="true"
+            android:permission="android.permission.DUMP" />
 
     </application>
 
