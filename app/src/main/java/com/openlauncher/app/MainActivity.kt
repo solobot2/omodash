@@ -211,10 +211,7 @@ class MainActivity : ComponentActivity() {
                                         onAssignPip         = { vm.startPipPicker() },
                                         onClearPip          = { vm.clearPipApp() },
                                         onLaunchPip         = { vm.launchApp(settings.pipAppPackage) },
-                                        onTapNowPlaying     = {
-                                            val pkg = nowPlaying?.controller?.packageName
-                                            if (!pkg.isNullOrEmpty()) vm.launchApp(pkg)
-                                        },
+                                        onTapNowPlaying     = { vm.openCurrentMediaApp() },
                                         onUpdateWidget      = { id, sx, sy -> vm.updateWidgetConfig(id, sx, sy) },
                                         onMoveWidget        = { id, gx, gy -> vm.moveWidgetConfig(id, gx, gy) },
                                         onAddWidget         = { id -> vm.addWidget(id) },
@@ -249,7 +246,13 @@ class MainActivity : ComponentActivity() {
                                         accent              = accent,
                                         onAppClick          = { app -> vm.launchApp(app.packageName) },
                                         onPickerSelect      = { slot, app -> vm.assignShortcut(slot, app) },
-                                        onCarPlaySelect     = { app -> vm.assignPickerApp(app) }
+                                        onCarPlaySelect     = { app -> vm.assignPickerApp(app) },
+                                        currentRadioSource = if (appPickerTarget == com.openlauncher.app.viewmodel.LauncherViewModel.AppPickerTarget.RADIO)
+                                            nowPlaying?.controller?.packageName?.let { pkg ->
+                                                val label = apps.firstOrNull { it.packageName == pkg }?.appName ?: pkg
+                                                "$label · ${nowPlaying?.title.orEmpty()}"
+                                            } else null,
+                                        onUseCurrentRadioSource = { vm.assignCurrentMediaAsRadio() }
                                     )
 
                                     NavDestination.SETTINGS -> SettingsScreen(

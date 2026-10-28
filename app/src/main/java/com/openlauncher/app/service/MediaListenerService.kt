@@ -117,6 +117,7 @@ class MediaListenerService : NotificationListenerService() {
         val playbackState = controller.playbackState
         val isPlaying = playbackState?.state == PlaybackState.STATE_PLAYING
         val playbackAction = playbackActionFor(playbackState?.state, playbackState?.actions ?: 0L)
+        val actions = playbackState?.actions ?: 0L
 
         // Skip redundant emissions: metadata bitmaps parcel into fresh instances on
         // every read, so a plain data-class compare would never match and every
@@ -125,7 +126,7 @@ class MediaListenerService : NotificationListenerService() {
         if (prev != null &&
             prev.controller?.sessionToken == controller.sessionToken &&
             prev.title == title && prev.artist == artist &&
-            prev.isPlaying == isPlaying && prev.playbackAction == playbackAction && prev.artUri == artUri &&
+            prev.isPlaying == isPlaying && prev.playbackAction == playbackAction && prev.actions == actions && prev.artUri == artUri &&
             (prev.albumArt != null) == (art != null)
         ) return
 
@@ -136,7 +137,8 @@ class MediaListenerService : NotificationListenerService() {
             artUri     = artUri,
             isPlaying  = isPlaying,
             controller = controller,
-            playbackAction = playbackAction
+            playbackAction = playbackAction,
+            actions = actions
         )
     }
 

@@ -12,5 +12,6 @@ data class NowPlayingState(
     val artUri: String? = null,
     val isPlaying: Boolean,
     val controller: MediaController?,
-    val playbackAction: PlaybackAction = PlaybackAction.DISABLED
+    val playbackAction: PlaybackAction = PlaybackAction.DISABLED,
+    val actions: Long = 0L
 )

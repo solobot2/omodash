@@ -159,6 +159,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun clearPipApp()          { updateSettings { copy(pipAppPackage = "") } }
     fun clearRadioApp()        { updateSettings { copy(radioPackage = "") } }
 
+    fun assignCurrentMediaAsRadio() {
+        val pkg = nowPlaying.value?.controller?.packageName ?: return
+        updateSettings { copy(radioPackage = pkg) }
+        com.openlauncher.app.diagnostics.DiagnosticLog.event("Radio", "User assigned current media session $pkg as radio")
+        _appPickerTarget.value = null
+        _nav.value = NavDestination.HOME
+    }
+
     fun updateWidgetConfig(id: String, spanX: Int, spanY: Int) {
         updateSettings {
             val resized = widgetLayout.map { w ->
@@ -340,37 +348,79 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun launchApp(packageName: String) {
         val app = getApplication<Application>()
         val pm  = app.packageManager
-        // Try standard launch intent first; fall back to first ACTION_MAIN activity in package
-        val intent = pm.getLaunchIntentForPackage(packageName)
-            ?: pm.queryIntentActivities(
-                Intent(Intent.ACTION_MAIN).setPackage(packageName), 0
-            ).firstOrNull()?.activityInfo?.let { ai ->
-                Intent(Intent.ACTION_MAIN).apply {
-                    setClassName(ai.packageName, ai.name)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (packageName.isBlank()) return
+        runCatching {
+            val vendorIntent = if (packageName == "com.desaysv.vehicle.carplayapp")
+                Intent("action.start.carplay").setPackage(packageName).takeIf { it.resolveActivity(pm) != null }
+                else null
+            // Try standard launch intent first; fall back to first ACTION_MAIN activity in package
+            val intent = vendorIntent ?: pm.getLaunchIntentForPackage(packageName)
+                ?: pm.queryIntentActivities(
+                    Intent(Intent.ACTION_MAIN).setPackage(packageName), 0
+                ).firstOrNull()?.activityInfo?.let { ai ->
+                    Intent(Intent.ACTION_MAIN).apply {
+                        setClassName(ai.packageName, ai.name)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
                 }
-            }
-        intent?.let { app.startActivity(it) }
+            checkNotNull(intent) { "This package has no launchable screen: $packageName" }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            com.openlauncher.app.diagnostics.DiagnosticLog.event("Launch", "Opening $packageName, component=${intent.component}, action=${intent.action}")
+            app.startActivity(intent)
+        }.onFailure {
+            com.openlauncher.app.diagnostics.DiagnosticLog.event("Launch", "Could not open $packageName", it)
+            android.widget.Toast.makeText(app, "Cannot open $packageName: ${it.message}", android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 
     // ── Now Playing ───────────────────────────────────────────────────────────
     val nowPlaying: StateFlow<NowPlayingState?> = MediaListenerService.nowPlaying
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    private fun openSessionScreen(controller: android.media.session.MediaController?): Boolean {
+        val pending = controller?.sessionActivity ?: return false
+        return runCatching {
+            pending.send()
+            com.openlauncher.app.diagnostics.DiagnosticLog.event("Launch", "Opened session screen for ${controller.packageName}")
+            true
+        }.getOrElse {
+            com.openlauncher.app.diagnostics.DiagnosticLog.event("Launch", "Could not open session screen for ${controller.packageName}", it)
+            false
+        }
+    }
+
+    fun openCurrentMediaApp() {
+        val controller = nowPlaying.value?.controller ?: return
+        if (!openSessionScreen(controller)) launchApp(controller.packageName)
+    }
+
     fun playPause() { nowPlaying.value?.controller?.also { ctrl ->
         val state = ctrl.playbackState
         // Radio sources often support Stop but not Pause. Use the live session
         // capabilities so the visible control can actually silence the source.
-        when (playbackActionFor(state?.state, state?.actions ?: 0L)) {
+        val action = playbackActionFor(state?.state, state?.actions ?: 0L)
+        com.openlauncher.app.diagnostics.DiagnosticLog.event("MediaCommand", "Requested $action for ${ctrl.packageName}; state=${state?.state}, actions=${state?.actions}")
+        runCatching { when (action) {
             PlaybackAction.PLAY -> ctrl.transportControls.play()
             PlaybackAction.PAUSE -> ctrl.transportControls.pause()
             PlaybackAction.STOP -> ctrl.transportControls.stop()
             PlaybackAction.DISABLED -> Unit
-        }
+        } }.onFailure { com.openlauncher.app.diagnostics.DiagnosticLog.event("MediaCommand", "Playback command failed", it) }
     }}
 
-    fun skipNext() { nowPlaying.value?.controller?.transportControls?.skipToNext() }
-    fun skipPrev() { nowPlaying.value?.controller?.transportControls?.skipToPrevious() }
+    private fun skip(controller: android.media.session.MediaController?, next: Boolean) {
+        controller ?: return
+        val action = if (next) android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT else android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS
+        val actions = controller.playbackState?.actions ?: 0L
+        val supported = (actions and action) != 0L
+        com.openlauncher.app.diagnostics.DiagnosticLog.event("MediaCommand", "Requested ${if (next) "NEXT" else "PREVIOUS"} for ${controller.packageName}; actions=$actions, advertised=$supported")
+        if (!supported) return
+        runCatching { if (next) controller.transportControls.skipToNext() else controller.transportControls.skipToPrevious() }
+            .onFailure { com.openlauncher.app.diagnostics.DiagnosticLog.event("MediaCommand", "Skip command failed", it) }
+    }
+
+    fun skipNext() { skip(nowPlaying.value?.controller, true) }
+    fun skipPrev() { skip(nowPlaying.value?.controller, false) }
 
     // ── Weather ───────────────────────────────────────────────────────────────
     private val _weather = MutableStateFlow<WeatherState?>(null)
@@ -443,14 +493,17 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     //   1. szchoiceway MCU units — Settings.Global JSON + canbus broadcasts.
     //      Full control: seek, band switching, direct frequency tuning.
     //   2. Any other unit — the vendor radio app's MediaSession. Frequency and
-    //      station are parsed from session metadata; seek maps to skip next/prev
-    //      (how steering-wheel keys drive these apps). No direct tuning.
+    //      station are parsed from session metadata. Controls depend on the actions
+    //      advertised and implemented by that session. No direct tuning.
     data class HardwareRadioState(
         val band: String,
         val freq: String,
         val stationName: String? = null,
         // Direct tuning + FM1/FM2/FM3/AM switching — vendor MCU backend only
-        val canTune: Boolean = false
+        val canTune: Boolean = false,
+        val canSeekUp: Boolean = true,
+        val canSeekDown: Boolean = true,
+        val canStop: Boolean = true
     ) {
         val display get() = "$band  $freq"
         val isAm    get() = band.equals("AM", ignoreCase = true)
@@ -505,7 +558,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         radioObserver = observer
     }
 
-    // ── MediaSession radio backend (universal fallback) ───────────────────────
+    // ── MediaSession radio backend ───────────────────────────────────────────
 
     private fun looksLikeRadioPackage(pkg: String): Boolean {
         val p = pkg.lowercase()
@@ -541,7 +594,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val station = (if (match != null) text.replace(match.value, "") else text)
             .trim(' ', '-', '|', '/', '•')
             .takeIf { it.isNotBlank() }
-        return HardwareRadioState(band = band, freq = rawFreq ?: "—", stationName = station, canTune = false)
+        return HardwareRadioState(band = band, freq = rawFreq ?: "—", stationName = station, canTune = false,
+            canSeekUp = (np.actions and android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT) != 0L,
+            canSeekDown = (np.actions and android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS) != 0L,
+            canStop = (np.actions and (android.media.session.PlaybackState.ACTION_STOP or android.media.session.PlaybackState.ACTION_PAUSE or android.media.session.PlaybackState.ACTION_PLAY_PAUSE)) != 0L)
     }
 
     // MCU backend wins when present; otherwise mirror the radio app's session
@@ -592,9 +648,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val mcuActive get() = _mcuRadio.value != null
 
     // Seek routes to the MCU when that backend is live, otherwise to the radio
-    // app's MediaSession — skip next/prev is how these apps expose seek.
-    fun radioSeekUp()   { if (mcuActive) sendMcuBytes(0x02, 0x0f) else radioSessionController()?.transportControls?.skipToNext() }
-    fun radioSeekDown() { if (mcuActive) sendMcuBytes(0x02, 0x0e) else radioSessionController()?.transportControls?.skipToPrevious() }
+    // app's MediaSession, only when it advertises skip next/previous.
+    fun radioSeekUp()   { if (mcuActive) sendMcuBytes(0x02, 0x0f) else skip(radioSessionController(), true) }
+    fun radioSeekDown() { if (mcuActive) sendMcuBytes(0x02, 0x0e) else skip(radioSessionController(), false) }
     // Band switching and direct tuning only exist on the MCU backend
     fun radioCycleFm()  { if (mcuActive) sendMcuBytes(0x02, 0x1e) }
     fun radioSwitchAm() { if (mcuActive) sendMcuBytes(0x02, 0x1f) }
@@ -603,11 +659,23 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun stopHardwareRadioApp() {
         if (mcuActive) radioStop()
-        else radioSessionController()?.transportControls?.pause()
+        else radioSessionController()?.let { controller ->
+            val actions = controller.playbackState?.actions ?: 0L
+            com.openlauncher.app.diagnostics.DiagnosticLog.event("MediaCommand", "Requested radio stop for ${controller.packageName}; actions=$actions")
+            runCatching {
+                when {
+                    (actions and android.media.session.PlaybackState.ACTION_STOP) != 0L -> controller.transportControls.stop()
+                    (actions and (android.media.session.PlaybackState.ACTION_PAUSE or android.media.session.PlaybackState.ACTION_PLAY_PAUSE)) != 0L -> controller.transportControls.pause()
+                    else -> Unit
+                }
+            }.onFailure { com.openlauncher.app.diagnostics.DiagnosticLog.event("MediaCommand", "Radio stop failed", it) }
+        }
     }
 
     fun launchHardwareRadioApp() {
         if (hasSzchoicewayMcu) radioStart()
+        val controller = radioSessionController()
+        if (openSessionScreen(controller)) return
         val pkg = settings.value.radioPackage.ifEmpty {
             when {
                 hasSzchoicewayMcu -> "com.szchoiceway.radio"
@@ -615,19 +683,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             }
         }
         if (pkg.isNotEmpty()) {
-            runCatching {
-                val intent = getApplication<Application>().packageManager
-                    .getLaunchIntentForPackage(pkg)
-                    ?: Intent(Intent.ACTION_MAIN).apply {
-                        `package` = pkg
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                getApplication<Application>().startActivity(intent)
-            }
+            launchApp(pkg)
         }
         // Resume playback if the session is just paused
-        radioSessionController()?.transportControls?.play()
+        // Opening a radio screen must not silently start playback or take audio focus.
     }
 
     fun refreshConnectivity() {

@@ -129,6 +129,9 @@ object DiagnosticReport {
             result.put("mediaSessions", JSONArray(manager.getActiveSessions(MediaAccess.component(context)).map {
                 JSONObject().put("package", it.packageName).put("state", it.playbackState?.state)
                     .put("actions", it.playbackState?.actions)
+                    .put("durationMs", it.metadata?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION))
+                    .put("sessionActivityPackage", it.sessionActivity?.creatorPackage)
+                    .put("customActions", JSONArray(it.playbackState?.customActions.orEmpty().map { action -> action.action }))
             }))
         } catch (error: Exception) { result.put("mediaSessionsError", "${error.javaClass.simpleName}: ${error.message}") }
         return result

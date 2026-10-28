@@ -46,6 +46,8 @@ fun AppLibraryScreen(
     onAppClick: (AppInfo) -> Unit,
     onPickerSelect: (Int, AppInfo) -> Unit,
     onCarPlaySelect: (AppInfo) -> Unit,
+    currentRadioSource: String? = null,
+    onUseCurrentRadioSource: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isDayMode     = LocalDayMode.current
@@ -152,6 +154,17 @@ fun AppLibraryScreen(
             }
         }
 
+        if (currentRadioSource != null) {
+            OutlinedButton(onClick = onUseCurrentRadioSource,
+                colors = com.openlauncher.app.ui.theme.outlinedControlColors()) {
+                Column {
+                    Text("Use the currently playing source as radio")
+                    Text(currentRadioSource, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Text("Turn on the factory radio first. This selects the session already shown in Any Player; you do not need to guess a system package.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        }
         HorizontalDivider(color = dividerColor)
 
         if (isLoading) {

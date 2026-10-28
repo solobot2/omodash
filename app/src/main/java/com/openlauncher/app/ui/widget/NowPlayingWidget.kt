@@ -1,6 +1,7 @@
 package com.openlauncher.app.ui.widget
 
 import android.media.MediaMetadata
+import android.media.session.PlaybackState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -46,6 +47,9 @@ import com.openlauncher.app.model.PlaybackAction
 import com.openlauncher.app.service.MediaListenerService
 import kotlin.math.abs
 import kotlinx.coroutines.delay
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 
 @Composable
 fun NowPlayingWidget(
@@ -183,6 +187,19 @@ fun NowPlayingWidget(
                     },
                     leadingIcon = { Icon(Icons.Default.Radio, null, tint = accent, modifier = Modifier.size(14.dp)) }
                 )
+                // Projection shortcuts must remain available while radio publishes media metadata.
+                if (hasCarPlay) DropdownMenuItem(
+                    text = { Text("Open CarPlay", color = dropdownText, fontSize = 11.sp) },
+                    onClick = { menuExpanded = false; if (!isEditing) onLaunchCarPlay() },
+                    enabled = !isEditing,
+                    leadingIcon = { Icon(Icons.Default.PhoneAndroid, null, tint = accent, modifier = Modifier.size(14.dp)) }
+                )
+                if (hasAutoApp) DropdownMenuItem(
+                    text = { Text("Open Android Auto", color = dropdownText, fontSize = 11.sp) },
+                    onClick = { menuExpanded = false; if (!isEditing) onLaunchAndroidAuto() },
+                    enabled = !isEditing,
+                    leadingIcon = { Icon(Icons.Default.DirectionsCar, null, tint = accent, modifier = Modifier.size(14.dp)) }
+                )
             }
         }
     }
@@ -232,7 +249,7 @@ private fun RadioDeck(
             )
             Spacer(Modifier.height(3.dp))
             Text(
-                "Start your head unit's radio app — or assign it below so Open Launcher can mirror and control it",
+                "Start the factory radio, then assign its current media source to show stations here.",
                 color = dimColor, fontSize = 7.sp, fontFamily = FontFamily.Monospace,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 lineHeight = 10.sp,
@@ -337,7 +354,7 @@ private fun RadioDeck(
                     .clip(CircleShape)
                     .background(if (powerOn) chipActiveBg else chipInactiveBg)
                     .border(1.5.dp, borderColor, CircleShape)
-                    .clickable {
+                    .clickable(enabled = !powerOn || hardwareRadio.canStop) {
                         if (powerOn) { onStopHardwareRadio(); isManuallyOff = true }
                         else { onLaunchHardwareRadio(); isManuallyOff = false }
                     },
@@ -345,7 +362,7 @@ private fun RadioDeck(
             ) {
                 Icon(
                     Icons.Default.PowerSettingsNew, "PWR",
-                    tint = if (powerOn) chipActiveText else dimColor,
+                    tint = if (!hardwareRadio.canStop && powerOn) dimColor.copy(alpha = 0.3f) else if (powerOn) chipActiveText else dimColor,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -383,7 +400,7 @@ private fun RadioDeck(
         // ── Row 3: seek + open ────────────────────────────────────────────────
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             RadioFlatButton(
-                label = "◄ SEEK", enabled = powerOn, active = false,
+                label = "◄ SEEK", enabled = powerOn && hardwareRadio.canSeekDown, active = false,
                 accent = accent, borderColor = borderColor, dimColor = dimColor,
                 modifier = Modifier.weight(1f),
                 onClick = onRadioSeekDown
@@ -395,7 +412,7 @@ private fun RadioDeck(
                 onClick = onLaunchHardwareRadio
             )
             RadioFlatButton(
-                label = "SEEK ►", enabled = powerOn, active = false,
+                label = "SEEK ►", enabled = powerOn && hardwareRadio.canSeekUp, active = false,
                 accent = accent, borderColor = borderColor, dimColor = dimColor,
                 modifier = Modifier.weight(1f),
                 onClick = onRadioSeekUp
@@ -403,6 +420,10 @@ private fun RadioDeck(
         }
 
         // ── Presets: only when the backend supports direct frequency tuning ──
+        if (!hardwareRadio.canSeekUp && !hardwareRadio.canSeekDown && !hardwareRadio.canStop) Text(
+            "Seek / stop controls are not reported by this source.",
+            color = dimColor, fontSize = 9.sp
+        )
         if (hardwareRadio.canTune) {
             var fmPresets by rememberSaveable { mutableStateOf(listOf(88.5f, 91.5f, 98.1f, 101.9f, 104.3f, 107.5f)) }
             var amPresets by rememberSaveable { mutableStateOf(listOf(540f, 680f, 820f, 1040f, 1260f, 1420f)) }
@@ -618,13 +639,20 @@ private fun StandardMinimalPlayer(
         } else {
             // Non-null playing track state
             val nonNullState = state!!
-            var positionMs by remember { mutableLongStateOf(nonNullState.controller?.playbackState?.position ?: 0L) }
+            val canPrevious = (nonNullState.actions and PlaybackState.ACTION_SKIP_TO_PREVIOUS) != 0L
+            val canNext = (nonNullState.actions and PlaybackState.ACTION_SKIP_TO_NEXT) != 0L
             val durationMs = nonNullState.controller?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
-
-            LaunchedEffect(nonNullState.isPlaying, nonNullState.title) {
-                while (nonNullState.isPlaying) {
-                    positionMs = nonNullState.controller?.playbackState?.position ?: positionMs
-                    delay(500)
+            var positionMs by remember(nonNullState.controller?.sessionToken, nonNullState.title) {
+                mutableLongStateOf(if (durationMs > 0) nonNullState.controller?.playbackState?.position ?: 0L else 0L)
+            }
+            val lifecycleOwner = LocalLifecycleOwner.current
+            LaunchedEffect(nonNullState.controller?.sessionToken, nonNullState.isPlaying, nonNullState.title, durationMs, lifecycleOwner) {
+                // Live radio has no progress bar. Never poll it, or a background Activity.
+                if (durationMs > 0 && nonNullState.isPlaying) lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                    while (true) {
+                        positionMs = nonNullState.controller?.playbackState?.position ?: positionMs
+                        delay(500)
+                    }
                 }
             }
 
@@ -697,6 +725,9 @@ private fun StandardMinimalPlayer(
 
                 // Progress + controls (bottom)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (!canPrevious && !canNext && nonNullState.playbackAction == PlaybackAction.DISABLED) Text(
+                        "No playback controls available in the current state", color = currentSubTextColor, fontSize = 9.sp
+                    )
                     if (durationMs > 0) {
                         LinearProgressIndicator(
                             progress = { (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) },
@@ -718,15 +749,15 @@ private fun StandardMinimalPlayer(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        IconButton(onClick = { if (!isEditing) onPrev() }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.SkipPrevious, "Prev", tint = currentIconColor, modifier = Modifier.size(20.dp))
+                        IconButton(onClick = onPrev, enabled = !isEditing && canPrevious, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.SkipPrevious, "Prev", tint = if (canPrevious) currentIconColor else currentIconColor.copy(alpha = 0.25f), modifier = Modifier.size(20.dp))
                         }
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
                                 .size(42.dp)
                                 .clip(CircleShape)
-                                .background(currentPlayBgColor)
+                                    .background(if (nonNullState.playbackAction == PlaybackAction.DISABLED) currentPlayBgColor.copy(alpha = 0.2f) else currentPlayBgColor)
                         ) {
                             IconButton(
                                 onClick = onPlayPause,
@@ -749,8 +780,8 @@ private fun StandardMinimalPlayer(
                                 )
                             }
                         }
-                        IconButton(onClick = { if (!isEditing) onNext() }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.SkipNext, "Next", tint = currentIconColor, modifier = Modifier.size(20.dp))
+                        IconButton(onClick = onNext, enabled = !isEditing && canNext, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Default.SkipNext, "Next", tint = if (canNext) currentIconColor else currentIconColor.copy(alpha = 0.25f), modifier = Modifier.size(20.dp))
                         }
                     }
                 }
