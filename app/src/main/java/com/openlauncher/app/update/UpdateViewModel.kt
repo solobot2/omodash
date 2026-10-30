@@ -1,6 +1,10 @@
 package com.openlauncher.app.update
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.openlauncher.app.BuildConfig
@@ -13,21 +17,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-data class UpdateUiState(
-    val currentVersion: String = "",
-    val candidate: UpdateInfo? = null,
-    val checking: Boolean = false,
-    val downloading: Boolean = false,
-    val progress: Int? = null,
-    val ready: Boolean = false,
-    val installing: Boolean = false,
-    val canInstall: Boolean = false,
-    val accessibilityEnabled: Boolean = false,
-    val autoConfirm: Boolean = true,
-    val message: String = "Check for a newer version on GitHub",
-    val error: String? = null
-)
-
 class UpdateViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application.applicationContext
     private val store = UpdateStore(app)
@@ -37,6 +26,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     private var windowFocused = false
     private var pollJob: Job? = null
     private var permissionsLoaded = false
+    private var installationSetupNeeded = false
     private var busy = false
     private var message = "Check for a newer version on GitHub"
 
@@ -80,19 +70,32 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
             }
             val download = UpdateDownloads.refresh(app)
             val installed = installedVersion(app)
+            val candidate = store.candidate?.takeIf { it.versionCode > installed.first }
+            val ready = candidate != null && store.verified
+            val canInstall = if (checkPermissions) UpdateInstaller.canInstall(app) else _state.value.canInstall
+            val installing = store.sessionId >= 0
+            val status = when {
+                download.running -> "Downloading ${candidate?.versionName.orEmpty()}"
+                installing -> "Opening the system installer"
+                ready && !canInstall -> "The update is downloaded. Allow installation to continue."
+                ready -> "The update is ready to install"
+                else -> message
+            }
             UpdateUiState(
                 currentVersion = "${installed.second} (${installed.first})",
-                candidate = store.candidate?.takeIf { it.versionCode > installed.first },
+                candidate = candidate,
                 downloading = download.running, progress = download.percent,
-                ready = store.verified, installing = store.sessionId >= 0,
-                canInstall = if (checkPermissions) UpdateInstaller.canInstall(app) else _state.value.canInstall,
+                ready = ready, installing = installing,
+                canInstall = canInstall,
                 accessibilityEnabled = if (checkPermissions) UpdateAccessibilityService.isEnabled(app) else _state.value.accessibilityEnabled,
-                autoConfirm = store.autoConfirm, message = message, error = store.error
+                autoConfirm = store.autoConfirm, message = status, error = store.error,
+                installationSetupNeeded = installationSetupNeeded && !canInstall
             )
         }
         if (checkPermissions) {
             com.openlauncher.app.diagnostics.DiagnosticLog.event("UpdateSetup", "Permission check: install=${snapshot.canInstall}, helper=${snapshot.accessibilityEnabled}")
         }
+        if (snapshot.canInstall) installationSetupNeeded = false
         _state.value = snapshot
         if (!foreground || !windowFocused) return
         if (store.confirmationIntent != null) {
@@ -175,6 +178,45 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
             } finally {
                 busy = false
                 refresh()
+            }
+        }
+    }
+
+    /** Explicit continuation of a downloaded update, never an automatic settings popup loop. */
+    fun allowInstallation() {
+        if (busy || !_state.value.ready || _state.value.installing) return
+        if (Build.VERSION.SDK_INT < 26) { install(); return }
+        store.error = null
+        store.installRequested = true
+        // Only the return from this explicit action rechecks permission. Normal focus changes
+        // retain the permission latch to avoid repeated OEM permission queries/popups.
+        permissionsLoaded = false
+        val opened = com.openlauncher.app.util.DevicePermissionSetup.openSystemScreen(app,
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${app.packageName}")), "UpdateSetup")
+        if (opened) {
+            _state.value = _state.value.copy(error = null)
+        } else {
+            permissionsLoaded = true
+            installationSetupNeeded = true
+            _state.value = _state.value.copy(installationSetupNeeded = true, error = null)
+        }
+    }
+
+    fun dismissInstallationSetup() {
+        installationSetupNeeded = false
+        store.installRequested = false
+        _state.value = _state.value.copy(installationSetupNeeded = false)
+    }
+
+    fun recheckInstallationSetup() {
+        if (busy) return
+        store.installRequested = true
+        store.error = null
+        viewModelScope.launch {
+            refresh(checkPermissions = true)
+            if (!_state.value.canInstall) {
+                store.error = "Installation is still not allowed. Complete the USB setup, then recheck."
+                _state.value = _state.value.copy(error = store.error)
             }
         }
     }

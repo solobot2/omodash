@@ -34,6 +34,23 @@ fun UpdateSettingsPanel(vm: UpdateViewModel = viewModel()) {
         onDispose { owner.lifecycle.removeObserver(observer); vm.setForeground(false) }
     }
 
+    UpdateSettingsContent(state, vm::check, vm::download, vm::install, vm::allowInstallation,
+        vm::cancelDownload, vm::setAutoConfirm, vm::recheckInstallationSetup, vm::dismissInstallationSetup)
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+internal fun UpdateSettingsContent(
+    state: UpdateUiState,
+    onCheck: () -> Unit,
+    onDownload: () -> Unit,
+    onInstall: () -> Unit,
+    onAllowInstallation: () -> Unit,
+    onCancelDownload: () -> Unit,
+    onAutoConfirm: (Boolean) -> Unit,
+    onRecheckInstallation: () -> Unit,
+    onDismissSetup: () -> Unit
+) {
     Column(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Installed version: ${state.currentVersion}", fontSize = 13.sp)
         Text(state.error ?: state.message, color = if (state.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onBackground,
@@ -51,29 +68,32 @@ fun UpdateSettingsPanel(vm: UpdateViewModel = viewModel()) {
             if (update.notes.isNotBlank()) Text(update.notes, fontSize = 12.sp)
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(colors = com.openlauncher.app.ui.theme.outlinedControlColors(), onClick = vm::check, enabled = !state.checking && !state.downloading && !state.installing) {
+            OutlinedButton(colors = com.openlauncher.app.ui.theme.outlinedControlColors(), onClick = onCheck, enabled = !state.checking && !state.downloading && !state.installing) {
                 Text(if (state.checking) "Checking…" else "Check updates")
             }
-            if (state.candidate != null && !state.downloading && !state.installing) {
-                Button(onClick = if (state.ready) vm::install else vm::download, enabled = !state.ready || state.canInstall,
-                    colors = com.openlauncher.app.ui.theme.filledControlColors()) {
-                    Text(if (state.ready) "Install update" else if (state.canInstall) "Download and install" else "Download update")
+            state.primaryAction?.let { action ->
+                Button(onClick = when (action) {
+                    UpdatePrimaryAction.DOWNLOAD -> onDownload
+                    UpdatePrimaryAction.INSTALL -> onInstall
+                    UpdatePrimaryAction.ALLOW_INSTALLATION -> onAllowInstallation
+                }, colors = com.openlauncher.app.ui.theme.filledControlColors()) {
+                    Text(checkNotNull(state.primaryActionLabel))
                 }
             }
-            if (state.downloading) OutlinedButton(colors = com.openlauncher.app.ui.theme.outlinedControlColors(), onClick = vm::cancelDownload) { Text("Cancel download") }
+            if (state.downloading) OutlinedButton(colors = com.openlauncher.app.ui.theme.outlinedControlColors(), onClick = onCancelDownload) { Text("Cancel download") }
         }
         Text(
             if (state.canInstall) "Update installation: allowed"
-            else "Update installation: not configured. Run the one-time USB setup on your laptop, then check for updates again.",
+            else "Update installation: permission required.",
             color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp
         )
-        if (state.ready && !state.canInstall) Text("The APK is downloaded and verified. Installation is waiting for USB setup.", fontSize = 12.sp)
+        if (state.ready && !state.canInstall) Text("The APK is downloaded and verified. Press Allow installation to continue.", fontSize = 12.sp)
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Automatically confirm this launcher's updates", fontSize = 13.sp)
                 Text("Only our verified APK; other installation dialogs are left alone.", fontSize = 11.sp)
             }
-            Switch(checked = state.autoConfirm, onCheckedChange = vm::setAutoConfirm)
+            Switch(checked = state.autoConfirm, onCheckedChange = onAutoConfirm)
         }
         if (state.autoConfirm) Text(
             if (state.accessibilityEnabled) "Automatic confirmation helper: enabled"
@@ -83,4 +103,19 @@ fun UpdateSettingsPanel(vm: UpdateViewModel = viewModel()) {
         )
         if (state.installing) Text("Complete installation in the system window. If needed, press Home to return to the updated launcher.", fontSize = 12.sp)
     }
+    if (state.installationSetupNeeded) AlertDialog(
+        onDismissRequest = onDismissSetup,
+        title = { Text("Set up update installation") },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("This head unit has no permission screen for installing apps. Connect your laptop by USB and run:")
+            Text("python3 tools/vehicle_usb.py setup", fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+            Text("The downloaded APK is kept. After setup, press Recheck and install.")
+            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        } },
+        confirmButton = { TextButton(onClick = onRecheckInstallation,
+            colors = com.openlauncher.app.ui.theme.textControlColors()) { Text("Recheck and install") } },
+        dismissButton = { TextButton(onClick = onDismissSetup,
+            colors = com.openlauncher.app.ui.theme.textControlColors()) { Text("Cancel") } }
+    )
+
 }
