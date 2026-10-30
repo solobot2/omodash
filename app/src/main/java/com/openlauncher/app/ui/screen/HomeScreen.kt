@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -31,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 import com.openlauncher.app.data.AppSettings
@@ -39,6 +42,10 @@ import com.openlauncher.app.data.computeWidgetMove
 import com.openlauncher.app.data.GRID_COLS
 import com.openlauncher.app.data.GRID_ROWS
 import com.openlauncher.app.data.WidgetConfig
+import com.openlauncher.app.data.WidgetSizeRules
+import com.openlauncher.app.data.widgetSizeRules
+import com.openlauncher.app.data.withResizedWidget
+import com.openlauncher.app.data.withAddedWidget
 import com.openlauncher.app.model.NowPlayingState
 import com.openlauncher.app.model.WeatherState
 import com.openlauncher.app.ui.theme.LocalDayMode
@@ -66,32 +73,6 @@ private val ALL_WIDGET_TYPES = listOf(
     WidgetTypeInfo("TRIP_TRACKER", "TRIP TRACKER", Icons.Default.Map,          "Trip logs & stats"),
     WidgetTypeInfo("SOUNDBOARD",  "SOUNDBOARD",  Icons.Default.Piano,         "Custom sound pads")
 )
-
-private fun canAddWidget(settings: com.openlauncher.app.data.AppSettings): Boolean {
-    val visibleIds = buildSet {
-        if (settings.showClock) add("CLOCK")
-        if (settings.showWeather) add("WEATHER")
-        if (settings.showNowPlaying) add("NOW_PLAYING")
-        if (settings.showTelemetry) add("TELEMETRY")
-        if (settings.showAltimeter) add("ALTIMETER")
-        if (settings.showSpeedometer) add("SPEEDOMETER")
-        if (settings.showVitals) add("VITALS")
-        if (settings.showTripTracker) add("TRIP_TRACKER")
-        if (settings.showSoundboard) add("SOUNDBOARD")
-    }
-    val activeWidgets = settings.widgetLayout.filter { it.enabled && it.id in visibleIds }
-    val occupied = buildSet<Pair<Int, Int>> {
-        activeWidgets.forEach { w ->
-            for (dx in 0 until w.spanX) for (dy in 0 until w.spanY) add(w.gridX + dx to w.gridY + dy)
-        }
-    }
-    val hasFreeCell = (0 until com.openlauncher.app.data.GRID_ROWS).any { r ->
-        (0 until com.openlauncher.app.data.GRID_COLS).any { c -> (c to r) !in occupied }
-    }
-    // Also true if any active widget spans >1 cell and can be shrunk to make room
-    val hasShrinkable = activeWidgets.any { it.spanX * it.spanY > 1 }
-    return hasFreeCell || hasShrinkable
-}
 
 @Composable
 fun HomeScreen(
@@ -264,14 +245,17 @@ fun HomeScreen(
             }
 
             // Compute proposed layout (push preview) while dragging
-            val proposedLayout = if (draggingOriginal != null && targetGridX != null && targetGridY != null)
-                computeWidgetMove(visible, draggingOriginal.id, targetGridX, targetGridY)
-            else null
+            val proposedLayout = remember(visible, draggingId, targetGridX, targetGridY) {
+                if (draggingOriginal != null && targetGridX != null && targetGridY != null)
+                    computeWidgetMove(visible, draggingOriginal.id, targetGridX, targetGridY)
+                else null
+            }
 
             // Drop ghost — rendered before widgets so it appears beneath them
             if (draggingOriginal != null && targetGridX != null && targetGridY != null) {
-                val gX = (cellW + gap) * targetGridX
-                val gY = (cellH + gap) * targetGridY
+                val placed = proposedLayout?.find { it.id == draggingOriginal.id } ?: draggingOriginal
+                val gX = (cellW + gap) * placed.gridX
+                val gY = (cellH + gap) * placed.gridY
                 val gW = cellW * draggingOriginal.spanX + gap * (draggingOriginal.spanX - 1)
                 val gH = cellH * draggingOriginal.spanY + gap * (draggingOriginal.spanY - 1)
                 Box(
@@ -508,6 +492,7 @@ fun HomeScreen(
     contextMenuId?.let { id ->
         WidgetContextMenu(
             widgetId            = id,
+            sizeRules           = settings.widgetSizeRules(id),
             accent              = accent,
             clockStyle          = settings.clockStyle,
             vitalsAsBars        = settings.vitalsAsBars,
@@ -527,6 +512,7 @@ fun HomeScreen(
         if (config != null) {
             WidgetResizeDialog(
                 config    = config,
+                settings  = settings,
                 accent    = accent,
                 isDayMode = isDayMode,
                 onDismiss = { resizingId = null },
@@ -552,8 +538,9 @@ fun HomeScreen(
 }
 
 @Composable
-private fun WidgetContextMenu(
+internal fun WidgetContextMenu(
     widgetId: String,
+    sizeRules: WidgetSizeRules,
     accent: Color,
     clockStyle: ClockStyle,
     vitalsAsBars: Boolean,
@@ -578,7 +565,12 @@ private fun WidgetContextMenu(
                 .width(200.dp)
         ) {
             val inactiveMenuTint = if (isDayMode) Color(0xFF777777) else Color(0xFF555555)
-            ContextRow("RESIZE", Icons.Default.OpenWith, accent, onResize, isDayMode = isDayMode)
+            if (sizeRules.isResizable) {
+                ContextRow("RESIZE", Icons.Default.OpenWith, accent, onResize, isDayMode = isDayMode)
+            } else {
+                Text("FIXED SIZE ${sizeRules.sizes.single()}", color = inactiveMenuTint,
+                    fontSize = 10.sp, modifier = Modifier.padding(16.dp))
+            }
             if (widgetId == "CLOCK") {
                 HorizontalDivider(color = menuDivider)
                 ContextRow(
@@ -672,117 +664,61 @@ private fun ContextRow(
 }
 
 @Composable
-private fun WidgetResizeDialog(
+internal fun WidgetResizeDialog(
     config: WidgetConfig,
+    settings: AppSettings,
     accent: Color,
     isDayMode: Boolean,
     onDismiss: () -> Unit,
     onConfirm: (spanX: Int, spanY: Int) -> Unit
 ) {
-    var spanX by remember { mutableStateOf(config.spanX) }
-    var spanY by remember { mutableStateOf(config.spanY) }
-
-    val maxSpanX = GRID_COLS - config.gridX
-    val maxSpanY = GRID_ROWS - config.gridY
-
-    val dialogBg     = if (isDayMode) Color(0xFFFFFFFF) else MaterialTheme.colorScheme.background
-    val dialogText   = if (isDayMode) Color(0xFF111111) else MaterialTheme.colorScheme.onBackground
-    val cancelColor  = if (isDayMode) Color(0xFF6C757D) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text          = config.id.replace('_', ' '),
-                color         = dialogText,
-                fontSize      = 11.sp,
-                letterSpacing = 2.sp
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                SpanRow(label = "WIDTH",  value = spanX, min = 1, max = maxSpanX, accent = accent, isDayMode = isDayMode) { spanX = it }
-                SpanRow(label = "HEIGHT", value = spanY, min = 1, max = maxSpanY, accent = accent, isDayMode = isDayMode) { spanY = it }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(spanX, spanY) }) {
-                Text("APPLY", color = accent, fontSize = 11.sp, letterSpacing = 1.sp)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("CANCEL", color = cancelColor, fontSize = 11.sp, letterSpacing = 1.sp)
-            }
-        },
-        containerColor    = dialogBg,
-        titleContentColor = dialogText,
-        textContentColor  = dialogText
-    )
-}
-
-@Composable
-private fun SpanRow(
-    label: String,
-    value: Int,
-    min: Int,
-    max: Int,
-    accent: Color,
-    isDayMode: Boolean,
-    onChange: (Int) -> Unit
-) {
-    val textColor   = if (isDayMode) Color(0xFF111111) else MaterialTheme.colorScheme.onBackground
-    val dimColor    = if (isDayMode) Color(0xFF495057) else Color(0xFF666666)
-    val disabledC   = if (isDayMode) Color(0xFFCED4DA) else Color(0xFF333333)
-    val inactiveBg  = if (isDayMode) Color(0xFFE9ECEF) else Color(0xFF2A2A2A)
-    Row(
-        verticalAlignment     = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            text          = label,
-            color         = dimColor,
-            fontSize      = 10.sp,
-            letterSpacing = 1.sp,
-            modifier      = Modifier.width(52.dp)
-        )
-        IconButton(
-            onClick  = { if (value > min) onChange(value - 1) },
-            modifier = Modifier.size(32.dp)
-        ) {
-            Icon(
-                Icons.Default.Remove, null,
-                tint     = if (value > min) textColor else disabledC,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-        Text(
-            text      = "$value",
-            color     = textColor,
-            fontSize  = 16.sp,
-            textAlign = TextAlign.Center,
-            modifier  = Modifier.width(24.dp)
-        )
-        IconButton(
-            onClick  = { if (value < max) onChange(value + 1) },
-            modifier = Modifier.size(32.dp)
-        ) {
-            Icon(
-                Icons.Default.Add, null,
-                tint     = if (value < max) accent else disabledC,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-        Spacer(Modifier.weight(1f))
-        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            repeat(max) { i ->
-                Box(
-                    modifier = Modifier
-                        .size(width = 14.dp, height = 10.dp)
-                        .background(
-                            if (i < value) accent.copy(alpha = 0.7f) else inactiveBg,
-                            RoundedCornerShape(1.dp)
-                        )
-                )
+    val rules = settings.widgetSizeRules(config.id)
+    var selected by remember(config) { mutableStateOf(rules.closest(config.spanX, config.spanY)) }
+    val available = remember(settings, config.id) {
+        rules.sizes.associateWith { settings.withResizedWidget(config.id, it.width, it.height) != null }
+    }
+    val dialogBg = if (isDayMode) Color.White else MaterialTheme.colorScheme.background
+    val dialogText = if (isDayMode) Color(0xFF111111) else MaterialTheme.colorScheme.onBackground
+    val selectionColor = if (isDayMode) Color(0xFF111111) else accent
+    val selectionText = if (isDayMode) Color.White else Color.Black
+    val actionColors = ButtonDefaults.textButtonColors(contentColor = selectionColor)
+    val density = LocalDensity.current
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        // A Dialog creates another Android window, so provide the launcher's scale inside it.
+        CompositionLocalProvider(LocalDensity provides density) {
+            Surface(
+                modifier = Modifier.padding(24.dp).widthIn(max = 560.dp).fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp), color = dialogBg, contentColor = dialogText
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(config.id.replace('_', ' '), fontSize = 14.sp, lineHeight = 18.sp)
+                    Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(if (rules.isSquare) "Square sizes only" else
+                            "Width: ${rules.minWidth}–${rules.maxWidth} · Height: ${rules.minHeight}–${rules.maxHeight}",
+                            fontSize = 11.sp, lineHeight = 14.sp)
+                        rules.sizes.chunked(3).forEach { sizes ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                sizes.forEach { size ->
+                                    FilterChip(
+                                        selected = selected == size, enabled = available[size] == true,
+                                        onClick = { selected = size },
+                                        label = { Text(size.toString(), fontSize = 12.sp, lineHeight = 16.sp) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = selectionColor, selectedLabelColor = selectionText)
+                                    )
+                                }
+                            }
+                        }
+                        if (available.values.any { !it }) Text("Dimmed sizes do not fit the current layout.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, lineHeight = 14.sp)
+                    }
+                    Row(Modifier.align(Alignment.End), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = onDismiss, colors = actionColors) { Text("CANCEL", fontSize = 12.sp, lineHeight = 16.sp) }
+                        TextButton(enabled = available[selected] == true, colors = actionColors,
+                            onClick = { onConfirm(selected.width, selected.height) }) { Text("APPLY", fontSize = 12.sp, lineHeight = 16.sp) }
+                    }
+                }
             }
         }
     }
@@ -815,7 +751,10 @@ private fun WidgetLibraryDialog(
         if (settings.showTripTracker) add("TRIP_TRACKER")
         if (settings.showSoundboard) add("SOUNDBOARD")
     }
-    val canAdd = canAddWidget(settings)
+    val additions = remember(settings) {
+        ALL_WIDGET_TYPES.associate { it.id to (settings.withAddedWidget(it.id) != null) }
+    }
+    val canAdd = ALL_WIDGET_TYPES.any { it.id !in activeIds && additions[it.id] == true }
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -853,7 +792,7 @@ private fun WidgetLibraryDialog(
                     WidgetLibraryCard(
                         info     = info,
                         isActive = isActive,
-                        canAdd   = canAdd,
+                        canAdd   = additions[info.id] == true,
                         accent   = accent,
                         isDayMode = isDayMode,
                         onToggle = { if (isActive) onRemove(info.id) else onAdd(info.id) }
@@ -864,7 +803,8 @@ private fun WidgetLibraryDialog(
             if (!canAdd) {
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    text          = "ALL ${GRID_COLS * GRID_ROWS} CELLS OCCUPIED — REMOVE A WIDGET TO ADD MORE",
+                    text          = if (ALL_WIDGET_TYPES.all { it.id in activeIds }) "ALL WIDGETS ARE ACTIVE"
+                        else "NO MORE WIDGETS FIT — REMOVE A WIDGET TO ADD ANOTHER",
                     color         = if (isDayMode) Color(0xFFE03131) else Color(0xFF3A3A3A),
                     fontSize      = 8.sp,
                     letterSpacing = 1.sp,

@@ -53,7 +53,7 @@ This project is currently in active development, but the core foundation is high
 <img width="2400" height="896" alt="Screenshot_20260527-025451" src="https://github.com/user-attachments/assets/cc038c53-dcf5-4b4b-bd73-bfcd18bd82d2" />
 
 ### 🧩 Modular Widget Grid
-The home screen is a fully drag-and-drop, resize-capable grid. Every widget pane can be moved, scaled, and stacked however you want. Nothing is locked to a fixed position. Add and remove widgets from the built-in library at any time.
+The home screen is a 6×2 grid with draggable widgets. Each widget defines its own minimum and maximum size. The size picker shows only allowed width/height pairs, with unavailable sizes disabled. Compass and round gauges use 1×1 or 2×2; the altimeter is fixed at 1×1. Media controls and Trip Tracker require at least two columns. Add and remove widgets from the built-in library; automatic shrinking also respects these rules. Existing layouts and display-style changes are normalized without overlaps.
 
 ### 🎛️ Instrument Panel Widgets
 A growing library of purpose-built car widgets designed to look like they belong on a dash — not a phone:
@@ -69,7 +69,7 @@ A growing library of purpose-built car widgets designed to look like they belong
 * **GPS Compass** — live bearing with calibrated heading display.
 
 ### 🗂️ App Library
-Pulls every installed app, including system-level apps that most launchers miss — such as buried CarPlay and Android Auto receiver apps on head units that don't surface them normally.
+Lists every installed app, including system-level apps and CarPlay / Android Auto receivers without ordinary launcher entries. App icons fill each tile, with the name overlaid along the bottom edge.
 
 ### 📌 Sidebar Shortcuts
 The sidebar holds your most-used app shortcuts. Drag to reorder, long-press to remap, and position the entire bar on the Left, Right, or Bottom of the screen to suit your driving hand or interior layout.

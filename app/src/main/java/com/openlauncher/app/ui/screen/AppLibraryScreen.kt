@@ -1,5 +1,6 @@
 package com.openlauncher.app.ui.screen
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,9 +18,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalTextInputService
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -216,41 +220,41 @@ private fun AppTile(
     val isDayMode  = LocalDayMode.current
     val tileBg     = if (isDayMode) Color(0xFFFFFFFF) else Color(0xFF0B0B0B)
     val tileBorder = if (isDayMode) Color(0xFFCCCCCC) else Color(0xFF1A1A1A)
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+    BoxWithConstraints(
         modifier = Modifier
             .aspectRatio(1f)
             .clip(TILE_RADIUS)
             .background(tileBg)
             .border(1.dp, tileBorder, TILE_RADIUS)
             .clickable(onClick = onClick)
-            .padding(7.dp)
     ) {
-        val bmp = remember(app.packageName) {
-            try { app.icon.toBitmap(80, 80) } catch (_: Exception) { null }
+        val edgePixels = with(LocalDensity.current) { maxWidth.roundToPx() }.coerceIn(64, 512)
+        val bitmap = remember(app.packageName, app.icon, edgePixels) {
+            runCatching { app.icon.toBitmap(edgePixels, edgePixels) }.getOrNull()
         }
-        if (bmp != null) {
-            androidx.compose.foundation.Image(
-                painter            = BitmapPainter(bmp.asImageBitmap()),
-                contentDescription = app.appName,
-                modifier           = Modifier.size(40.dp)
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(), contentDescription = null,
+                contentScale = ContentScale.Crop, filterQuality = FilterQuality.High,
+                modifier = Modifier.fillMaxSize()
             )
         } else {
-            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                Text(app.appName.take(1).uppercase(), color = accent, fontSize = 18.sp)
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(app.appName.take(1).uppercase(), color = accent, fontSize = 48.sp)
             }
         }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text          = app.appName.uppercase(),
-            style         = MaterialTheme.typography.labelSmall,
-            color         = if (isDayMode) Color(0xFF666666) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-            maxLines      = 1,
-            overflow      = TextOverflow.Ellipsis,
-            textAlign     = TextAlign.Center,
-            letterSpacing = 1.sp,
-            fontSize      = 8.sp
-        )
+        Box(
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
+                .padding(start = 8.dp, end = 8.dp, top = 18.dp, bottom = 8.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Text(
+                text = app.appName.uppercase(),
+                color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center, letterSpacing = 0.5.sp,
+                fontSize = 10.sp, lineHeight = 13.sp
+            )
+        }
     }
 }

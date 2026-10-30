@@ -131,7 +131,7 @@ class SettingsRepository(private val context: Context) {
                 speedometerDigitalOnly = prefs[Keys.SPEEDOMETER_DIGITAL_ONLY] ?: defaults.speedometerDigitalOnly,
                 gradientDirection = prefs[Keys.GRADIENT_DIRECTION]?.let { runCatching { GradientDirection.valueOf(it) }.getOrNull() } ?: defaults.gradientDirection,
                 useCustomBackgroundColor = prefs[Keys.USE_CUSTOM_BG_COLOR] ?: defaults.useCustomBackgroundColor
-            )
+            ).withValidWidgetLayout()
     }
 
     suspend fun saveSettings(s: AppSettings) {
@@ -146,7 +146,8 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs -> writeSettings(prefs, transform(readSettings(prefs))) }
     }
 
-    private fun writeSettings(prefs: MutablePreferences, s: AppSettings) {
+    private fun writeSettings(prefs: MutablePreferences, settings: AppSettings) {
+            val s = settings.withValidWidgetLayout()
             prefs[Keys.VEHICLE_NAME]       = s.vehicleName
             prefs[Keys.ACCENT_COLOR]       = s.accentColor
             prefs[Keys.BG_COLOR]           = s.backgroundColor
