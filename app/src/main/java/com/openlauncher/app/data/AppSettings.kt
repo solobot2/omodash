@@ -50,7 +50,7 @@ data class ShortcutConfig(
     val customIconOverride: DefaultShortcutIcon? = null
 )
 
-const val GRID_COLS = 3
+const val GRID_COLS = 6
 const val GRID_ROWS = 2
 
 data class WidgetConfig(
@@ -80,8 +80,8 @@ data class AppSettings(
     val showNowPlaying: Boolean = true,
     val shortcuts: List<ShortcutConfig> = defaultShortcuts(),
     val widgetLayout: List<WidgetConfig> = defaultWidgetLayout(),
-    val carPlayPackage: String = "",
-    val androidAutoPackage: String = "",
+    val carPlayPackage: String = OmodaDefaults.CARPLAY,
+    val androidAutoPackage: String = OmodaDefaults.ANDROID_AUTO,
     val useGradient: Boolean = false,
     val gradientEndColor: Int = Color.Black.toArgb(),
     val wallpaperDim: Float = 0.55f,
@@ -90,10 +90,8 @@ data class AppSettings(
     val showAltimeter: Boolean = false,
     val showSpeedometer: Boolean = false,
     val dayNightMode: DayNightMode = DayNightMode.DARK,
-    val showPip: Boolean = false,
-    val pipAppPackage: String = "",
     // Head unit's radio app — mirrored & controlled via its MediaSession
-    val radioPackage: String = "",
+    val radioPackage: String = OmodaDefaults.AUDIO,
     val onboardingCompleted: Boolean = false,
     val showVitals: Boolean = false,
     val showTripTracker: Boolean = false,
@@ -107,17 +105,17 @@ data class AppSettings(
 )
 
 fun defaultShortcuts() = listOf(
-    ShortcutConfig(label = "Radio", isDefault = true, defaultIcon = DefaultShortcutIcon.RADIO),
-    ShortcutConfig(label = "Camera", isDefault = true, defaultIcon = DefaultShortcutIcon.CAMERA),
-    ShortcutConfig(label = "Music", isDefault = true, defaultIcon = DefaultShortcutIcon.MUSIC),
-    ShortcutConfig(label = "Phone", isDefault = true, defaultIcon = DefaultShortcutIcon.PHONE)
+    ShortcutConfig(packageName = OmodaDefaults.AUDIO, label = "Radio", isDefault = true, defaultIcon = DefaultShortcutIcon.RADIO),
+    ShortcutConfig(packageName = OmodaDefaults.CAMERA, label = "Camera", isDefault = true, defaultIcon = DefaultShortcutIcon.CAMERA),
+    ShortcutConfig(packageName = OmodaDefaults.AUDIO, label = "Music", isDefault = true, defaultIcon = DefaultShortcutIcon.MUSIC),
+    ShortcutConfig(packageName = OmodaDefaults.PHONE, label = "Phone", isDefault = true, defaultIcon = DefaultShortcutIcon.PHONE)
 )
 
 fun defaultWidgetLayout() = listOf(
-    WidgetConfig("CLOCK",       gridX = 0, gridY = 0, spanX = 1, spanY = 1),
-    WidgetConfig("WEATHER",     gridX = 1, gridY = 0, spanX = 1, spanY = 1),
-    WidgetConfig("TELEMETRY",   gridX = 2, gridY = 0, spanX = 1, spanY = 2),
-    WidgetConfig("NOW_PLAYING", gridX = 0, gridY = 1, spanX = 2, spanY = 1)
+    WidgetConfig("CLOCK",       gridX = 0, gridY = 0, spanX = 2, spanY = 1),
+    WidgetConfig("WEATHER",     gridX = 2, gridY = 0, spanX = 2, spanY = 1),
+    WidgetConfig("TELEMETRY",   gridX = 4, gridY = 0, spanX = 2, spanY = 2),
+    WidgetConfig("NOW_PLAYING", gridX = 0, gridY = 1, spanX = 4, spanY = 1)
 )
 
 fun AppSettings.activeWidgetIds(): Set<String> = buildSet {

@@ -155,8 +155,9 @@ fun AppLibraryScreen(
         }
 
         if (currentRadioSource != null) {
-            OutlinedButton(onClick = onUseCurrentRadioSource,
-                colors = com.openlauncher.app.ui.theme.outlinedControlColors()) {
+            Button(onClick = onUseCurrentRadioSource,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp).heightIn(min = 48.dp),
+                colors = com.openlauncher.app.ui.theme.filledControlColors()) {
                 Column {
                     Text("Use the currently playing source as radio")
                     Text(currentRadioSource, style = MaterialTheme.typography.bodySmall)

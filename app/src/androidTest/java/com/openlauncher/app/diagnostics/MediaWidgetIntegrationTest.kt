@@ -23,10 +23,11 @@ import java.util.concurrent.atomic.AtomicInteger
 @RunWith(AndroidJUnit4::class)
 class MediaWidgetIntegrationTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
+    private val automation get() = instrumentation.getUiAutomation(android.app.UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
 
     private fun find(root: AccessibilityNodeInfo?, label: String): AccessibilityNodeInfo? {
         root ?: return null
-        if (root.contentDescription?.toString() == label || root.text?.toString()?.contains(label) == true) return root
+        if (root.contentDescription?.toString() == label || root.text?.toString()?.contains(label, ignoreCase = true) == true) return root
         for (i in 0 until root.childCount) find(root.getChild(i), label)?.let { return it }
         return null
     }
@@ -34,7 +35,7 @@ class MediaWidgetIntegrationTest {
     private fun node(label: String): AccessibilityNodeInfo {
         val end = android.os.SystemClock.elapsedRealtime() + 5_000
         while (android.os.SystemClock.elapsedRealtime() < end) {
-            find(instrumentation.uiAutomation.rootInActiveWindow, label)?.let { return it }
+            find(automation.rootInActiveWindow, label)?.let { return it }
             Thread.sleep(50)
         }
         error("Missing visible item: $label")
@@ -70,10 +71,29 @@ class MediaWidgetIntegrationTest {
             } }
             assertFalse(effectivelyEnabled(node("Next")))
             assertFalse(effectivelyEnabled(node("Prev")))
-            click("Source Selector")
-            click("Open CarPlay")
+            click("CarPlay")
             instrumentation.waitForIdleSync()
             assertEquals(1, opened.get())
+        }
+    }
+
+    @Test fun radioStationAndProjectionShortcutAreVisibleInLightTheme() {
+        val opened = AtomicInteger()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> activity.setContent {
+                com.openlauncher.app.ui.theme.OpenLauncherTheme(accent = Color.White, isDayMode = true) {
+                    NowPlayingWidget(state = null, accent = Color.White, carPlayPackage = "carplay", androidAutoPackage = "",
+                        onPlayPause = {}, onNext = {}, onPrev = {}, onLaunchCarPlay = { opened.incrementAndGet() },
+                        onLaunchAndroidAuto = {}, onTapToOpenApp = {}, onOpenContextMenu = {}, isDayMode = true,
+                        hardwareRadio = com.openlauncher.app.viewmodel.LauncherViewModel.HardwareRadioState("FM", "", stationName = "Radio 357"),
+                        modifier = Modifier.fillMaxSize().background(Color.White))
+                }
+            } }
+            node("Radio 357")
+            click("CarPlay")
+            assertEquals(1, opened.get())
+            val file = java.io.File(instrumentation.targetContext.filesDir, "radio-light.png")
+            java.io.FileOutputStream(file).use { automation.takeScreenshot().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
 
@@ -81,7 +101,7 @@ class MediaWidgetIntegrationTest {
         val selected = AtomicInteger()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { activity -> activity.setContent {
-                MaterialTheme(colorScheme = darkColorScheme()) {
+                com.openlauncher.app.ui.theme.OpenLauncherTheme(accent = Color.White, isDayMode = true) {
                     AppLibraryScreen(apps = emptyList(), isLoading = false, isPickerMode = false, pickerSlot = null,
                         isCarPlayPickerMode = true, carPlayPickerLabel = "CHOOSE RADIO APP", accent = Color.Cyan,
                         onAppClick = {}, onPickerSelect = { _, _ -> }, onCarPlaySelect = {},
@@ -95,4 +115,23 @@ class MediaWidgetIntegrationTest {
             assertEquals(1, selected.get())
         }
     }
+    @Test fun assignedFactoryRadioOpensWithoutAskingForAssignment() {
+        val opened = AtomicInteger()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> activity.setContent {
+                MaterialTheme {
+                    NowPlayingWidget(state = null, accent = Color.White, carPlayPackage = "carplay", androidAutoPackage = "auto",
+                        onPlayPause = {}, onNext = {}, onPrev = {}, onLaunchCarPlay = {}, onLaunchAndroidAuto = {},
+                        onTapToOpenApp = {}, onOpenContextMenu = {}, radioPackage = "com.desaysv.svaudioapp",
+                        onLaunchHardwareRadio = { opened.incrementAndGet() }, modifier = Modifier.fillMaxSize())
+                }
+            } }
+            click("Source Selector")
+            click("FM/AM Radio")
+            click("OPEN RADIO")
+            assertEquals(1, opened.get())
+            assertNull(find(automation.rootInActiveWindow, "ASSIGN RADIO APP"))
+        }
+    }
+
 }

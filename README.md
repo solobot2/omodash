@@ -15,6 +15,7 @@ This fork publishes signed APK updates to `solobot2/omodash`. See [release and u
 
 For one-time USB permission setup, see [USB setup instructions](docs/usb-setup.md).
 For crash reports and ZIP diagnostics sent from the car, see [diagnostic instructions](docs/diagnostics.md).
+For CarPlay / Android Auto integration and factory radio, see [projection instructions](docs/projection.md).
 
 ## 📖 Table of Contents
 - [Why Build Another Car Launcher?](#-why-build-another-car-launcher)
@@ -85,10 +86,9 @@ Speed and distance calculations use a rewritten GPS math layer with improved fil
 ### 🎨 Deep Personalization
 Accent color, background color, gradient, wallpaper with adjustable dim, font weight, text scale, UI scale, and app font — all tunable from the settings menu, which is organized into logical sections (Appearance, Layout, Widgets, System).
 
-### 📱 Picture-in-Picture (PiP) Overlay ⚠️ *Beta*
-Launch any app as a floating freeform window layered over the launcher.
-
-> **This feature is currently in beta and requires the special `openlauncher-test-pip` build.** It relies on AOSP platform-level signing to access the window embedding APIs. The standard APK does not include PiP — use the `test-pip` release asset if you want to try it. Expect rough edges: not all apps behave correctly in a freeform window, and compatibility varies heavily by head unit ROM. This is a work in progress.
+### Android Auto
+The factory receiver opens inside the home tile area through a local TCP ADB helper.
+See [setup and compatibility](docs/projection.md). CarPlay opens its factory app.
 
 ### 🔔 First-Run Onboarding
 A clean onboarding flow on first launch explains key permissions (location, notification listener, draw-over-apps) before requesting them, with direct links to the relevant system settings screens.

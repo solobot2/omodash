@@ -278,8 +278,8 @@ class Vehicle:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="USB-настройка Omodash. Не включает сетевой ADB, не меняет штатные приложения.")
-    parser.add_argument("action", choices=("setup", "status", "collect", "stop"), nargs="?", default="setup")
+    parser = argparse.ArgumentParser(description="USB-настройка Omodash и локального AA-помощника.")
+    parser.add_argument("action", choices=("setup", "status", "collect", "stop", "enable-android-auto"), nargs="?", default="setup")
     parser.add_argument("--adb", help="Путь к adb / adb.exe из Android SDK Platform-Tools")
     parser.add_argument("--serial", help="USB serial из adb devices -l")
     parser.add_argument("--allow-emulator", action="store_true", help="Только для разработки: разрешить явно выбранный эмулятор")
@@ -303,7 +303,11 @@ def main():
         serial = select_device(listing, args.serial, args.allow_emulator, confirmed_usb)
         vehicle = Vehicle(adb, serial)
         vehicle.preflight(setup=args.action == "setup")
-        if args.action == "setup":
+        if args.action == "enable-android-auto":
+            print(execute([adb, "-s", serial, "tcpip", "5555"]))
+            print("TCP ADB запрошен. Откройте Android Auto в Omodash и подтвердите запрос USB-отладки на экране ГУ, если он появится.")
+            print("После полной перезагрузки может потребоваться повторить эту команду через USB.")
+        elif args.action == "setup":
             vehicle.setup()
         elif args.action == "status":
             if not all(vehicle.status().values()):

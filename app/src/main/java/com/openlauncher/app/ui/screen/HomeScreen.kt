@@ -108,13 +108,6 @@ fun HomeScreen(
     onPrev: () -> Unit,
     onLaunchCarPlay: () -> Unit,
     onLaunchAndroidAuto: () -> Unit,
-    onAssignCarPlay: () -> Unit,
-    onAssignAndroidAuto: () -> Unit,
-    onClearCarPlay: () -> Unit,
-    onClearAndroidAuto: () -> Unit,
-    onAssignPip: () -> Unit,
-    onClearPip: () -> Unit,
-    onLaunchPip: () -> Unit,
     onTapNowPlaying: () -> Unit,
     onUpdateWidget: (id: String, spanX: Int, spanY: Int) -> Unit,
     onMoveWidget: (id: String, gridX: Int, gridY: Int) -> Unit,
@@ -126,6 +119,7 @@ fun HomeScreen(
     onUpdateSoundPad: (index: Int, pad: com.openlauncher.app.data.SoundPadConfig) -> Unit = { _, _ -> },
     hardwareRadio: com.openlauncher.app.viewmodel.LauncherViewModel.HardwareRadioState? = null,
     onLaunchHardwareRadio: () -> Unit = {},
+    onStartHardwareRadio: () -> Unit = onLaunchHardwareRadio,
     onStopHardwareRadio: () -> Unit = {},
     onRadioSeekUp: () -> Unit = {},
     onRadioSeekDown: () -> Unit = {},
@@ -133,6 +127,8 @@ fun HomeScreen(
     onRadioSwitchAm: () -> Unit = {},
     onRadioTune: (band: String, freq: Float) -> Unit = { _, _ -> },
     onAssignRadio: () -> Unit = {},
+    projectionContent: (@Composable () -> Unit)? = null,
+    onDismissProjection: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accent       = Color(settings.accentColor)
@@ -185,6 +181,11 @@ fun HomeScreen(
             AnimatedVisibility(visible = isData, enter = fadeIn(), exit = fadeOut()) {
                 Icon(Icons.Default.SignalCellularAlt, "Data", tint = statusIconColor, modifier = Modifier.size(16.dp))
             }
+            if (projectionContent != null) {
+                IconButton(onClick = onDismissProjection, modifier = Modifier.size(44.dp)) {
+                    Icon(Icons.Default.Close, "Close projection", tint = headerTextColor, modifier = Modifier.size(20.dp))
+                }
+            }
             if (isLandscape) {
                 Spacer(Modifier.width(8.dp))
                 if (editMode) {
@@ -202,7 +203,7 @@ fun HomeScreen(
                     Spacer(Modifier.width(2.dp))
                 }
                 IconButton(
-                    onClick  = { editMode = !editMode },
+                    onClick  = { onDismissProjection(); editMode = !editMode },
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
@@ -424,13 +425,15 @@ fun HomeScreen(
                             isDayMode           = isDayMode,
                             hardwareRadio         = hardwareRadio,
                             onLaunchHardwareRadio = onLaunchHardwareRadio,
+                            onStartHardwareRadio  = onStartHardwareRadio,
                             onStopHardwareRadio   = onStopHardwareRadio,
                             onRadioSeekUp         = onRadioSeekUp,
                             onRadioSeekDown       = onRadioSeekDown,
                             onRadioCycleFm        = onRadioCycleFm,
                             onRadioSwitchAm       = onRadioSwitchAm,
                             onRadioTune           = onRadioTune,
-                            onAssignRadio         = onAssignRadio
+                            onAssignRadio         = onAssignRadio,
+                            radioPackage          = settings.radioPackage
                         )
                         "TELEMETRY" -> TelemetryWidget(
                             location  = location,
@@ -496,6 +499,8 @@ fun HomeScreen(
                     )
                 }
             }
+            // Covers only the tile area: header and sidebar stay outside this container.
+            if (!editMode && projectionContent != null) Box(Modifier.fillMaxSize().zIndex(10f)) { projectionContent() }
         }
     }
 
@@ -507,17 +512,8 @@ fun HomeScreen(
             clockStyle          = settings.clockStyle,
             vitalsAsBars        = settings.vitalsAsBars,
             speedometerDigitalOnly = settings.speedometerDigitalOnly,
-            carPlayPackage      = settings.carPlayPackage,
-            androidAutoPackage  = settings.androidAutoPackage,
-            pipAppPackage       = settings.pipAppPackage,
             isDayMode           = isDayMode,
             onResize            = { contextMenuId = null; resizingId = id },
-            onAssignCarPlay     = { contextMenuId = null; onAssignCarPlay() },
-            onAssignAndroidAuto = { contextMenuId = null; onAssignAndroidAuto() },
-            onClearCarPlay      = { contextMenuId = null; onClearCarPlay() },
-            onClearAndroidAuto  = { contextMenuId = null; onClearAndroidAuto() },
-            onAssignPip         = { contextMenuId = null; onAssignPip() },
-            onClearPip          = { contextMenuId = null; onClearPip() },
             onSetClockStyle     = { onSetClockStyle(it) },
             onSetVitalsAsBars   = { onSetVitalsAsBars(it) },
             onSetSpeedometerDigitalOnly = { onSetSpeedometerDigitalOnly(it) },
@@ -562,17 +558,8 @@ private fun WidgetContextMenu(
     clockStyle: ClockStyle,
     vitalsAsBars: Boolean,
     speedometerDigitalOnly: Boolean,
-    carPlayPackage: String = "",
-    androidAutoPackage: String = "",
-    pipAppPackage: String = "",
     isDayMode: Boolean,
     onResize: () -> Unit,
-    onAssignCarPlay: () -> Unit,
-    onAssignAndroidAuto: () -> Unit,
-    onClearCarPlay: () -> Unit,
-    onClearAndroidAuto: () -> Unit,
-    onAssignPip: () -> Unit,
-    onClearPip: () -> Unit,
     onSetClockStyle: (ClockStyle) -> Unit,
     onSetVitalsAsBars: (Boolean) -> Unit,
     onSetSpeedometerDigitalOnly: (Boolean) -> Unit,
@@ -646,20 +633,7 @@ private fun WidgetContextMenu(
                     isDayMode = isDayMode
                 )
             }
-            if (widgetId == "NOW_PLAYING") {
-                HorizontalDivider(color = menuDivider)
-                ContextRow("ASSIGN CARPLAY APP",      Icons.Default.PhoneAndroid,  accent, onAssignCarPlay, isDayMode = isDayMode)
-                if (carPlayPackage.isNotEmpty()) {
-                    HorizontalDivider(color = menuDivider)
-                    ContextRow("CLEAR CARPLAY APP", Icons.Default.PhoneAndroid, Color(0xFF884444), onClearCarPlay, isDayMode = isDayMode)
-                }
-                HorizontalDivider(color = menuDivider)
-                ContextRow("ASSIGN ANDROID AUTO APP", Icons.Default.DirectionsCar, accent, onAssignAndroidAuto, isDayMode = isDayMode)
-                if (androidAutoPackage.isNotEmpty()) {
-                    HorizontalDivider(color = menuDivider)
-                    ContextRow("CLEAR ANDROID AUTO APP", Icons.Default.DirectionsCar, Color(0xFF884444), onClearAndroidAuto, isDayMode = isDayMode)
-                }
-            }
+
 
         }
     }

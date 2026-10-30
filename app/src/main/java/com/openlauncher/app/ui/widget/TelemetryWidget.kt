@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openlauncher.app.util.LocationData
@@ -80,7 +81,9 @@ fun TelemetryWidget(
                     Text(
                         text     = "N",
                         color    = cardinalMain,
-                        fontSize = 11.sp,
+                        maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 11.sp,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .padding(top = (capturedMaxHeight / 2 - radius - 6.dp).coerceAtLeast(0.dp))
@@ -88,7 +91,9 @@ fun TelemetryWidget(
                     Text(
                         text     = "S",
                         color    = cardinalMain,
-                        fontSize = 11.sp,
+                        maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 11.sp,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = (capturedMaxHeight / 2 - radius - 6.dp).coerceAtLeast(0.dp))
@@ -150,7 +155,7 @@ fun TelemetryWidget(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Bottom
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text          = "LATITUDE",
                     style         = MaterialTheme.typography.labelSmall,
@@ -161,10 +166,13 @@ fun TelemetryWidget(
                 Text(
                     text     = if (location != null) formatLat(location.latitude) else "—",
                     color    = contentColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     fontSize = 11.sp
                 )
             }
             Column(
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
                 horizontalAlignment = Alignment.End
             ) {
@@ -180,6 +188,8 @@ fun TelemetryWidget(
                     text      = if (location != null) formatLon(location.longitude) else "—",
                     color     = contentColor,
                     fontSize  = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.End
                 )
             }

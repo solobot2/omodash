@@ -69,16 +69,17 @@ fun NowPlayingWidget(
     isDayMode: Boolean = false,
     hardwareRadio: com.openlauncher.app.viewmodel.LauncherViewModel.HardwareRadioState? = null,
     onLaunchHardwareRadio: () -> Unit = {},
+    onStartHardwareRadio: () -> Unit = onLaunchHardwareRadio,
     onStopHardwareRadio: () -> Unit = {},
     onRadioSeekUp: () -> Unit = {},
     onRadioSeekDown: () -> Unit = {},
     onRadioCycleFm: () -> Unit = {},
     onRadioSwitchAm: () -> Unit = {},
     onRadioTune: (band: String, freq: Float) -> Unit = { _, _ -> },
-    onAssignRadio: () -> Unit = {}
+    onAssignRadio: () -> Unit = {},
+    radioPackage: String = ""
 ) {
     val context     = LocalContext.current
-    val isConnected by MediaListenerService.isConnected.collectAsState()
     val hasCarPlay  = carPlayPackage.isNotEmpty()
     val hasAutoApp  = androidAutoPackage.isNotEmpty()
     val hasContent  = state != null && state.title.isNotEmpty()
@@ -105,13 +106,15 @@ fun NowPlayingWidget(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 8.dp)
+                    .padding(start = 12.dp, end = 12.dp, top = 52.dp, bottom = 8.dp)
             ) {
                 RadioDeck(
                     accent = accent,
                     isDayMode = isDayMode,
                     hardwareRadio = hardwareRadio,
+                    radioAssigned = radioPackage.isNotBlank(),
                     onLaunchHardwareRadio = onLaunchHardwareRadio,
+                    onStartHardwareRadio = onStartHardwareRadio,
                     onStopHardwareRadio = onStopHardwareRadio,
                     onRadioSeekUp = onRadioSeekUp,
                     onRadioSeekDown = onRadioSeekDown,
@@ -130,17 +133,12 @@ fun NowPlayingWidget(
                 hasContent = hasContent,
                 isEditing = isEditing,
                 isDayMode = isDayMode,
-                isConnected = isConnected,
-                hasCarPlay = hasCarPlay,
-                hasAutoApp = hasAutoApp,
                 onPlayPause = onPlayPause,
                 onNext = onNext,
                 onPrev = onPrev,
-                onLaunchCarPlay = onLaunchCarPlay,
-                onLaunchAndroidAuto = onLaunchAndroidAuto,
                 onTapToOpenApp = onTapToOpenApp,
                 onOpenContextMenu = onOpenContextMenu,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize().padding(top = 48.dp)
             )
         }
 
@@ -148,58 +146,55 @@ fun NowPlayingWidget(
         var menuExpanded by remember { mutableStateOf(false) }
         val selectorIconColor = if (isDayMode) Color.Black.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
         
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(end = 4.dp, top = 4.dp)
+        Row(
+            modifier = Modifier.align(Alignment.TopEnd).height(48.dp).padding(end = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            IconButton(
-                onClick = { menuExpanded = true },
-                modifier = Modifier.size(24.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "Source Selector",
-                    tint = selectorIconColor,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-            val dropdownBg   = if (isDayMode) Color(0xFFF0F0F0) else MaterialTheme.colorScheme.background
-            val dropdownText = if (isDayMode) Color(0xFF111111) else MaterialTheme.colorScheme.onBackground
-            DropdownMenu(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-                modifier = Modifier.background(dropdownBg)
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Any Player", color = dropdownText, fontSize = 11.sp) },
-                    onClick = {
-                        selectedSource = "Any Player"
-                        menuExpanded = false
-                    },
-                    leadingIcon = { Icon(Icons.Default.MusicNote, null, tint = accent, modifier = Modifier.size(14.dp)) }
-                )
-                DropdownMenuItem(
-                    text = { Text("FM/AM Radio", color = dropdownText, fontSize = 11.sp) },
-                    onClick = {
-                        selectedSource = "FM/AM Radio"
-                        menuExpanded = false
-                    },
-                    leadingIcon = { Icon(Icons.Default.Radio, null, tint = accent, modifier = Modifier.size(14.dp)) }
-                )
-                // Projection shortcuts must remain available while radio publishes media metadata.
-                if (hasCarPlay) DropdownMenuItem(
-                    text = { Text("Open CarPlay", color = dropdownText, fontSize = 11.sp) },
-                    onClick = { menuExpanded = false; if (!isEditing) onLaunchCarPlay() },
-                    enabled = !isEditing,
-                    leadingIcon = { Icon(Icons.Default.PhoneAndroid, null, tint = accent, modifier = Modifier.size(14.dp)) }
-                )
-                if (hasAutoApp) DropdownMenuItem(
-                    text = { Text("Open Android Auto", color = dropdownText, fontSize = 11.sp) },
-                    onClick = { menuExpanded = false; if (!isEditing) onLaunchAndroidAuto() },
-                    enabled = !isEditing,
-                    leadingIcon = { Icon(Icons.Default.DirectionsCar, null, tint = accent, modifier = Modifier.size(14.dp)) }
-                )
+            if (hasCarPlay) FilledTonalButton(
+                onClick = onLaunchCarPlay, enabled = !isEditing,
+                colors = com.openlauncher.app.ui.theme.filledControlColors(),
+                contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.height(40.dp)
+            ) { Icon(Icons.Default.PhoneAndroid, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("CarPlay", fontSize = 11.sp) }
+            if (hasAutoApp) FilledTonalButton(
+                onClick = onLaunchAndroidAuto, enabled = !isEditing,
+                colors = com.openlauncher.app.ui.theme.filledControlColors(),
+                contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.height(40.dp)
+            ) { Icon(Icons.Default.DirectionsCar, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Android Auto", fontSize = 11.sp) }
+            Box {
+                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.MoreVert, "Source Selector", tint = selectorIconColor, modifier = Modifier.size(24.dp))
+                }
+                val dropdownBg   = if (isDayMode) Color(0xFFF0F0F0) else MaterialTheme.colorScheme.background
+                val dropdownText = if (isDayMode) Color(0xFF111111) else MaterialTheme.colorScheme.onBackground
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                    modifier = Modifier.background(dropdownBg)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Any Player", color = dropdownText, fontSize = 11.sp) },
+                        onClick = {
+                            selectedSource = "Any Player"
+                            menuExpanded = false
+                        },
+                        leadingIcon = { Icon(Icons.Default.MusicNote, null, tint = accent, modifier = Modifier.size(14.dp)) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("FM/AM Radio", color = dropdownText, fontSize = 11.sp) },
+                        onClick = {
+                            selectedSource = "FM/AM Radio"
+                            menuExpanded = false
+                        },
+                        leadingIcon = { Icon(Icons.Default.Radio, null, tint = accent, modifier = Modifier.size(14.dp)) }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Change radio app", color = dropdownText, fontSize = 11.sp) },
+                        onClick = { menuExpanded = false; onAssignRadio() },
+                        enabled = !isEditing,
+                        leadingIcon = { Icon(Icons.Default.Radio, null, tint = accent, modifier = Modifier.size(14.dp)) }
+                    )
+                }
             }
         }
     }
@@ -218,7 +213,9 @@ private fun RadioDeck(
     accent: Color,
     isDayMode: Boolean,
     hardwareRadio: com.openlauncher.app.viewmodel.LauncherViewModel.HardwareRadioState?,
+    radioAssigned: Boolean,
     onLaunchHardwareRadio: () -> Unit,
+    onStartHardwareRadio: () -> Unit,
     onStopHardwareRadio: () -> Unit,
     onRadioSeekUp: () -> Unit,
     onRadioSeekDown: () -> Unit,
@@ -242,46 +239,31 @@ private fun RadioDeck(
             Icon(Icons.Default.Radio, null, tint = dimColor, modifier = Modifier.size(22.dp))
             Spacer(Modifier.height(6.dp))
             Text(
-                "NO RADIO SOURCE",
+                if (radioAssigned) "RADIO IS NOT PLAYING" else "NO RADIO SOURCE",
                 color = contentColor.copy(alpha = 0.85f),
                 fontSize = 9.sp, fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp
             )
             Spacer(Modifier.height(3.dp))
             Text(
-                "Start the factory radio, then assign its current media source to show stations here.",
+                if (radioAssigned) "Open the factory radio to show station information." else "Choose the head unit's radio app to show station information.",
                 color = dimColor, fontSize = 7.sp, fontFamily = FontFamily.Monospace,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 lineHeight = 10.sp,
                 modifier = Modifier.padding(horizontal = 28.dp)
             )
             Spacer(Modifier.height(10.dp))
-            Box(
-                modifier = Modifier
-                    .height(26.dp)
-                    .border(1.dp, accent.copy(alpha = 0.6f), RoundedCornerShape(3.dp))
-                    .clip(RoundedCornerShape(3.dp))
-                    .clickable { onAssignRadio() }
-                    .padding(horizontal = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "ASSIGN RADIO APP",
-                    color = accent, fontSize = 7.5.sp, fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold, letterSpacing = 1.sp
-                )
-            }
+            Button(
+                onClick = if (radioAssigned) onLaunchHardwareRadio else onAssignRadio,
+                colors = com.openlauncher.app.ui.theme.filledControlColors(),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                modifier = Modifier.heightIn(min = 40.dp)
+            ) { Text(if (radioAssigned) "OPEN RADIO" else "ASSIGN RADIO APP", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
         }
         return
     }
 
-    // Power is a local veil over the live source: stopping doesn't always clear
-    // the vendor state, so a fresh emission flips it back on (radio re-engaged)
-    var isManuallyOff by remember { mutableStateOf(false) }
-    LaunchedEffect(hardwareRadio) {
-        if (isManuallyOff) isManuallyOff = false
-    }
-    val powerOn = !isManuallyOff
+    val powerOn = hardwareRadio.isPlaying
 
     val displayBand = hardwareRadio.band.uppercase()
     val freqClean   = hardwareRadio.freq.replace(Regex("[^0-9.]"), "")
@@ -355,8 +337,7 @@ private fun RadioDeck(
                     .background(if (powerOn) chipActiveBg else chipInactiveBg)
                     .border(1.5.dp, borderColor, CircleShape)
                     .clickable(enabled = !powerOn || hardwareRadio.canStop) {
-                        if (powerOn) { onStopHardwareRadio(); isManuallyOff = true }
-                        else { onLaunchHardwareRadio(); isManuallyOff = false }
+                        if (powerOn) onStopHardwareRadio() else onStartHardwareRadio()
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -372,12 +353,14 @@ private fun RadioDeck(
         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    displayFreq,
+                    displayFreq.ifBlank { hardwareRadio.stationName ?: "RADIO" },
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                     color = if (powerOn) contentColor else contentColor.copy(alpha = 0.3f),
-                    fontSize = 34.sp, fontWeight = FontWeight.Light,
+                    fontSize = if (displayFreq.isBlank()) 22.sp else 34.sp, fontWeight = FontWeight.Light,
                     fontFamily = FontFamily.Monospace, letterSpacing = 0.sp
                 )
-                Text(
+                if (displayFreq.isNotBlank()) Text(
                     displayUnit,
                     color = dimColor, fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
@@ -386,8 +369,8 @@ private fun RadioDeck(
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    text = (if (!powerOn) "RADIO OFF" else hardwareRadio.stationName ?: "LIVE").uppercase(),
-                    color = if (powerOn) accent else dimColor.copy(alpha = 0.5f),
+                    text = (if (!powerOn) "RADIO OFF" else if (displayFreq.isBlank()) "LIVE" else hardwareRadio.stationName ?: "LIVE"),
+                    color = if (powerOn) contentColor else dimColor.copy(alpha = 0.5f),
                     fontSize = 8.sp, fontFamily = FontFamily.Monospace,
                     letterSpacing = 1.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
@@ -543,14 +526,9 @@ private fun StandardMinimalPlayer(
     hasContent: Boolean,
     isEditing: Boolean,
     isDayMode: Boolean,
-    isConnected: Boolean,
-    hasCarPlay: Boolean,
-    hasAutoApp: Boolean,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrev: () -> Unit,
-    onLaunchCarPlay: () -> Unit,
-    onLaunchAndroidAuto: () -> Unit,
     onTapToOpenApp: () -> Unit,
     onOpenContextMenu: () -> Unit,
     modifier: Modifier = Modifier
@@ -569,71 +547,13 @@ private fun StandardMinimalPlayer(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                if (hasCarPlay || hasAutoApp) {
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (hasCarPlay) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .let {
-                                        if (!isEditing) it.combinedClickable(
-                                            onClick = onLaunchCarPlay,
-                                            onLongClick = onOpenContextMenu
-                                        ) else it
-                                    }
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(Icons.Default.PhoneAndroid, null, tint = accent.copy(alpha = 0.7f), modifier = Modifier.size(28.dp))
-                                    Text("CARPLAY", color = accent.copy(alpha = 0.6f), fontSize = 8.sp, letterSpacing = 2.sp)
-                                }
-                            }
-                        }
-                        if (hasCarPlay && hasAutoApp) {
-                            androidx.compose.material3.VerticalDivider(
-                                modifier = Modifier.fillMaxHeight().padding(vertical = 16.dp),
-                                color = if (isDayMode) Color(0xFFBBBBBB) else Color(0xFF1E1E1E)
-                            )
-                        }
-                        if (hasAutoApp) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .let {
-                                        if (!isEditing) it.combinedClickable(
-                                            onClick = onLaunchAndroidAuto,
-                                            onLongClick = onOpenContextMenu
-                                        ) else it
-                                    }
-                            ) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(Icons.Default.DirectionsCar, null, tint = accent.copy(alpha = 0.7f), modifier = Modifier.size(28.dp))
-                                    Text("ANDROID AUTO", color = accent.copy(alpha = 0.6f), fontSize = 8.sp, letterSpacing = 2.sp)
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(Icons.Default.MusicNote, null, tint = idleIconColor, modifier = Modifier.size(24.dp))
-                        Text("NO MEDIA PLAYING", color = idleTextColor, fontSize = 7.sp, letterSpacing = 1.sp)
-                    }
+                Column(
+                    modifier = Modifier.clickable(enabled = !isEditing, onClick = onTapToOpenApp).padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.MusicNote, null, tint = idleIconColor, modifier = Modifier.size(28.dp))
+                    Text("OPEN MUSIC", color = idleTextColor, fontSize = 10.sp, letterSpacing = 1.sp)
                 }
             }
         } else {

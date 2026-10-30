@@ -80,6 +80,22 @@ class MainActivity : ComponentActivity() {
             val pickerSlot      by vm.shortcutPickerSlot.collectAsStateWithLifecycle()
             val appPickerTarget by vm.appPickerTarget.collectAsStateWithLifecycle()
 
+            var projectionPackage by remember { mutableStateOf<String?>(null) }
+            val closeProjection: () -> Unit = {
+                projectionPackage = null
+            }
+            val openProjection: (String) -> Unit = { pkg ->
+                projectionPackage = pkg.takeIf { it.isNotBlank() }
+            }
+            LaunchedEffect(nav) { if (nav != NavDestination.HOME) projectionPackage = null }
+            DisposableEffect(Unit) {
+                val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                    if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) projectionPackage = null
+                }
+                lifecycle.addObserver(observer)
+                onDispose { lifecycle.removeObserver(observer) }
+            }
+
             val accent         = Color(settings.accentColor)
             val bg             = if (settings.useCustomBackgroundColor) {
                 Color(settings.backgroundColor)
@@ -102,7 +118,7 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(
                 LocalDensity provides Density(
                     density   = baseDensity.density * settings.uiScale,
-                    fontScale = baseDensity.fontScale
+                    fontScale = baseDensity.fontScale * settings.textScale
                 )
             ) {
                 if (!settingsLoaded) {
@@ -112,7 +128,7 @@ class MainActivity : ComponentActivity() {
                     background = bg,
                     textColor  = textColor,
                     fontBold   = settings.fontBold,
-                    textScale  = settings.textScale,
+                    textScale  = 1f,
                     appFont    = settings.appFont,
                     isDayMode  = isDayMode,
                     useCustomBg = settings.useCustomBackgroundColor
@@ -148,7 +164,7 @@ class MainActivity : ComponentActivity() {
                         val sidebarContent: @Composable () -> Unit = {
                             val sidebarDensity = Density(
                                 density = baseDensity.density * (1.0f + (settings.uiScale - 1.0f) * 0.35f),
-                                fontScale = baseDensity.fontScale
+                                fontScale = baseDensity.fontScale * settings.textScale
                             )
                             CompositionLocalProvider(LocalDensity provides sidebarDensity) {
                                 Sidebar(
@@ -159,15 +175,22 @@ class MainActivity : ComponentActivity() {
                                         apps.find { it.packageName == pkg }?.icon
                                     },
                                     onNavigate    = { dest ->
+                                        closeProjection()
                                         vm.cancelShortcutPicker()
                                         vm.cancelCarPlayPicker()
                                         vm.exitRearrangeMode()
                                         vm.navigate(dest)
                                     },
                                     onShortcutClick = { slot ->
+                                        closeProjection()
                                         val shortcut = settings.shortcuts[slot]
                                         if (shortcut.packageName.isNotEmpty()) {
-                                            vm.launchApp(shortcut.packageName)
+                                            if (shortcut.defaultIcon == com.openlauncher.app.data.DefaultShortcutIcon.CAMERA &&
+                                                shortcut.packageName == com.openlauncher.app.data.OmodaDefaults.CAMERA) vm.launchCamera()
+                                            else if (shortcut.packageName == com.openlauncher.app.data.OmodaDefaults.AUDIO &&
+                                                shortcut.defaultIcon in setOf(com.openlauncher.app.data.DefaultShortcutIcon.RADIO, com.openlauncher.app.data.DefaultShortcutIcon.MUSIC))
+                                                vm.launchFactoryAudio(shortcut.defaultIcon == com.openlauncher.app.data.DefaultShortcutIcon.RADIO)
+                                            else vm.launchApp(shortcut.packageName)
                                         }
                                     },
                                     onShortcutLongPress  = { slot -> vm.startShortcutPicker(slot) },
@@ -203,15 +226,12 @@ class MainActivity : ComponentActivity() {
                                         onNext              = vm::skipNext,
                                         onPrev              = vm::skipPrev,
                                         onLaunchCarPlay     = { vm.launchApp(settings.carPlayPackage) },
-                                        onLaunchAndroidAuto = { vm.launchApp(settings.androidAutoPackage) },
-                                        onAssignCarPlay     = { vm.startCarPlayPicker() },
-                                        onAssignAndroidAuto = { vm.startAndroidAutoPicker() },
-                                        onClearCarPlay      = { vm.clearCarPlayApp() },
-                                        onClearAndroidAuto  = { vm.clearAndroidAutoApp() },
-                                        onAssignPip         = { vm.startPipPicker() },
-                                        onClearPip          = { vm.clearPipApp() },
-                                        onLaunchPip         = { vm.launchApp(settings.pipAppPackage) },
-                                        onTapNowPlaying     = { vm.openCurrentMediaApp() },
+                                        onLaunchAndroidAuto = { openProjection(settings.androidAutoPackage) },
+                                        onTapNowPlaying = {
+                                            val pkg = nowPlaying?.controller?.packageName
+                                            if (pkg == settings.androidAutoPackage) openProjection(pkg)
+                                            else vm.openCurrentMediaApp()
+                                        },
                                         onUpdateWidget      = { id, sx, sy -> vm.updateWidgetConfig(id, sx, sy) },
                                         onMoveWidget        = { id, gx, gy -> vm.moveWidgetConfig(id, gx, gy) },
                                         onAddWidget         = { id -> vm.addWidget(id) },
@@ -222,13 +242,20 @@ class MainActivity : ComponentActivity() {
                                         onUpdateSoundPad    = { idx, pad -> vm.updateSoundboardPad(idx, pad) },
                                         hardwareRadio         = hardwareRadio,
                                         onLaunchHardwareRadio = { vm.launchHardwareRadioApp() },
+                                        onStartHardwareRadio = vm::startHardwareRadioPlayback,
                                         onStopHardwareRadio   = { vm.stopHardwareRadioApp() },
                                         onRadioSeekUp         = { vm.radioSeekUp() },
                                         onRadioSeekDown       = { vm.radioSeekDown() },
                                         onRadioCycleFm        = { vm.radioCycleFm() },
                                         onRadioSwitchAm       = { vm.radioSwitchAm() },
                                         onRadioTune           = { band, freq -> vm.radioTune(band, freq) },
-                                        onAssignRadio         = { vm.startRadioPicker() }
+                                        onAssignRadio         = { vm.startRadioPicker() },
+                                        onDismissProjection = closeProjection,
+                                        projectionContent = projectionPackage?.let { pkg ->
+                                            @Composable { key(pkg) {
+                                                com.openlauncher.app.projection.ProjectionWidget(pkg, closeProjection)
+                                            } }
+                                        }
                                     )
 
                                     NavDestination.APP_LIBRARY -> AppLibraryScreen(
@@ -239,7 +266,6 @@ class MainActivity : ComponentActivity() {
                                         isCarPlayPickerMode = appPickerTarget != null,
                                         carPlayPickerLabel  = when (appPickerTarget) {
                                             com.openlauncher.app.viewmodel.LauncherViewModel.AppPickerTarget.ANDROID_AUTO -> "CHOOSE ANDROID AUTO APP"
-                                            com.openlauncher.app.viewmodel.LauncherViewModel.AppPickerTarget.PIP          -> "CHOOSE PIP APP"
                                             com.openlauncher.app.viewmodel.LauncherViewModel.AppPickerTarget.RADIO        -> "CHOOSE RADIO APP"
                                             else -> "CHOOSE CARPLAY APP"
                                         },
@@ -310,6 +336,8 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         com.openlauncher.app.diagnostics.DiagnosticLog.event("Activity", "Stopped")
         vm.stopLocationUpdates()
+        com.openlauncher.app.projection.taskhost.TaskHostState.close(
+            com.openlauncher.app.projection.taskhost.TaskHostState.token)
     }
 
     override fun onStart() {

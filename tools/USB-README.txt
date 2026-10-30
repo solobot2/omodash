@@ -42,3 +42,9 @@ Settings → Diagnostics → Record logs for 2 minutes → Start recording.
 
 Подробности: docs/usb-setup.md.
 Проверено на отдельном AOSP Android 11. Проверка конкретной магнитолы ещё требуется.
+
+Android Auto в плитках Omodash 0.0.14+:
+  python3 tools/vehicle_usb.py enable-android-auto
+После команды откройте Android Auto в лаунчере и подтвердите USB debugging на ГУ.
+TCP ADB может отключаться после полного перезапуска ГУ; тогда повторите команду по USB.
+Подробности: docs/usb-setup.md

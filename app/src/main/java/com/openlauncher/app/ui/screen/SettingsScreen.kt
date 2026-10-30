@@ -58,8 +58,6 @@ fun SettingsScreen(
     var showGradientEndPicker by remember { mutableStateOf(false) }
     var showFontColorPicker   by remember { mutableStateOf(false) }
     var showDiagnosticReport by remember { mutableStateOf(false) }
-    var showStopDialog by remember { mutableStateOf(false) }
-    var stopError by remember { mutableStateOf<String?>(null) }
 
     // OpenDocument (not GetContent): only SAF document URIs carry a persistable
     // grant, so this is what actually keeps the wallpaper readable after reboot
@@ -130,11 +128,6 @@ fun SettingsScreen(
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
 
-            // canDrawOverlays requires API 23 — on Android 5.x the permission
-            // model doesn't exist, so treat it as granted
-            val canDrawOverlays = remember(permissionRefresh) {
-                android.os.Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(context)
-            }
             val hasLocation = remember(permissionRefresh) {
                 androidx.core.content.ContextCompat.checkSelfPermission(
                     context, android.Manifest.permission.ACCESS_FINE_LOCATION
@@ -205,25 +198,6 @@ fun SettingsScreen(
             )
             SettingsDivider()
             SettingsButton(
-                label    = "Draw Over Other Apps",
-                sublabel = if (canDrawOverlays) "Granted — PIP overlay enabled" else "Required for PIP floating window",
-                icon     = if (canDrawOverlays) Icons.Default.Layers else Icons.Default.LayersClear,
-                accent   = if (canDrawOverlays) accent else Color(0xFF993333),
-                onClick  = {
-                    if (android.os.Build.VERSION.SDK_INT >= 23) {
-                        runCatching {
-                            context.startActivity(
-                                Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:${context.packageName}")
-                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        }
-                    }
-                }
-            )
-            SettingsDivider()
-            SettingsButton(
                 label    = "Location Access",
                 sublabel = if (hasLocation) "Granted — GPS, compass & weather active" else "Required for compass, speed & weather",
                 icon     = if (hasLocation) Icons.Default.LocationOn else Icons.Default.LocationOff,
@@ -264,16 +238,7 @@ fun SettingsScreen(
                 accent = accent,
                 onClick = onAssignCarPlay
             )
-            if (settings.carPlayPackage.isNotEmpty()) {
-                SettingsDivider()
-                SettingsButton(
-                    label = "Clear CarPlay app",
-                    sublabel = "Remove the shortcut assignment",
-                    icon = Icons.Default.Clear,
-                    accent = accent,
-                    onClick = { onUpdate { copy(carPlayPackage = "") } }
-                )
-            }
+
             SettingsDivider()
             SettingsButton(
                 label = "Android Auto app",
@@ -282,16 +247,7 @@ fun SettingsScreen(
                 accent = accent,
                 onClick = onAssignAndroidAuto
             )
-            if (settings.androidAutoPackage.isNotEmpty()) {
-                SettingsDivider()
-                SettingsButton(
-                    label = "Clear Android Auto app",
-                    sublabel = "Remove the shortcut assignment",
-                    icon = Icons.Default.Clear,
-                    accent = accent,
-                    onClick = { onUpdate { copy(androidAutoPackage = "") } }
-                )
-            }
+
         }
 
         // ── Vehicle Name ─────────────────────────────────────────────────────
@@ -691,8 +647,8 @@ fun SettingsScreen(
                 Slider(
                     value         = settings.textScale,
                     onValueChange = { onUpdate { copy(textScale = it) } },
-                    valueRange    = 0.8f..1.4f,
-                    steps         = 5,
+                    valueRange    = 1f..2f,
+                    steps         = 19,
                     colors        = sliderColors(accent),
                     modifier      = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                 )
@@ -709,8 +665,8 @@ fun SettingsScreen(
                 Slider(
                     value         = settings.uiScale,
                     onValueChange = { onUpdate { copy(uiScale = it) } },
-                    valueRange    = 0.7f..1.5f,
-                    steps         = 7,
+                    valueRange    = 1f..2f,
+                    steps         = 19,
                     colors        = sliderColors(accent),
                     modifier      = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                 )
@@ -810,15 +766,6 @@ fun SettingsScreen(
 
         // ── Maintenance ──────────────────────────────────────────────────────
         SettingsSection("Maintenance") {
-            SettingsButton(
-                label = "Stop launcher process",
-                sublabel = "Close our tasks and services; Android may reopen a default Home app",
-                icon = Icons.Default.PowerSettingsNew,
-                accent = accent,
-                onClick = { showStopDialog = true }
-            )
-            stopError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Spacer(Modifier.height(8.dp))
             Button(
                 onClick  = { showResetDialog = true },
                 shape    = RoundedCornerShape(4.dp),
@@ -847,17 +794,6 @@ fun SettingsScreen(
     } // end Box
 
     // ── Dialogs ──────────────────────────────────────────────────────────────
-    if (showStopDialog) {
-        ConfirmDialog(
-            title = "Stop launcher process",
-            message = "Open another Home app and stop Open Launcher? Downloads and sharing may be interrupted. " +
-                "Our background services will stay off until you open the launcher again. " +
-                "Android may start the launcher again when you press Home if it is still the default Home app.",
-            confirmLabel = "Stop launcher",
-            onConfirm = { showStopDialog = false; stopError = com.openlauncher.app.util.LauncherExit.stop(context) },
-            onDismiss = { showStopDialog = false }
-        )
-    }
     if (showDiagnosticReport) com.openlauncher.app.diagnostics.DiagnosticReportDialog(onDismiss = { showDiagnosticReport = false })
 
     if (showResetDialog) {
