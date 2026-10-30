@@ -78,7 +78,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         updateSettings {
             copy(shortcuts = shortcuts.toMutableList().also { list ->
                 while (list.size <= slot) list.add(ShortcutConfig())
-                list[slot] = ShortcutConfig(packageName = app.packageName, label = app.appName)
+                val previous = list[slot]
+                list[slot] = if (previous.isDefault) previous.copy(packageName = app.packageName)
+                    else ShortcutConfig(packageName = app.packageName, label = app.appName)
             })
         }
         _shortcutPickerSlot.value = null
@@ -89,7 +91,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         updateSettings {
             copy(shortcuts = shortcuts.toMutableList().also { list ->
                 if (slot in list.indices) {
-                    list[slot] = defaultShortcuts().getOrNull(slot) ?: ShortcutConfig()
+                    list[slot] = com.openlauncher.app.data.VehiclePresets.find(vehiclePresetId).shortcuts().getOrNull(slot) ?: ShortcutConfig()
                 }
             })
         }
@@ -459,14 +461,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     private fun isRadioSessionPackage(pkg: String): Boolean {
         val assigned = settings.value.radioPackage
-        return if (assigned.isNotEmpty()) pkg == assigned else looksLikeRadioPackage(pkg)
+        val preset = com.openlauncher.app.data.VehiclePresets.find(settings.value.vehiclePresetId)
+        return pkg in preset.radioSessionPackages || if (assigned.isNotEmpty()) pkg == assigned else looksLikeRadioPackage(pkg)
     }
 
     private fun parseSessionRadio(np: NowPlayingState): HardwareRadioState? {
         val pkg = np.controller?.packageName ?: return null
         if (!isRadioSessionPackage(pkg)) return null
         val metadata = com.openlauncher.app.model.radioMetadata(np.title, np.artist)
-        if (pkg == com.openlauncher.app.data.OmodaDefaults.AUDIO && metadata.frequency == null) return null
+        if (pkg == com.openlauncher.app.data.VehiclePresets.current().binding(com.openlauncher.app.data.VehicleApp.RADIO).packageName && metadata.frequency == null) return null
         return HardwareRadioState(band = metadata.band, freq = metadata.frequency.orEmpty(), stationName = metadata.station,
             isPlaying = np.isPlaying,
             canSeekUp = (np.actions and android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT) != 0L,
@@ -478,7 +481,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val desayRadioState = flow {
         try {
             while (currentCoroutineContext().isActive) {
-                emit(desayRadio.read())
+                val radioBinding = com.openlauncher.app.data.VehiclePresets.current().binding(com.openlauncher.app.data.VehicleApp.RADIO)
+                emit(if (radioBinding.launch == com.openlauncher.app.data.VehicleLaunch.DESAY_RADIO) desayRadio.read()
+                    else { desayRadio.close(); null })
                 delay(1_500)
             }
         } finally { desayRadio.close() }
@@ -579,7 +584,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun launchFactoryAudio(radio: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
             if (!desayRadio.openAudioSource(if (radio) 8 else 2)) withContext(Dispatchers.Main) {
-                launchApp(com.openlauncher.app.data.OmodaDefaults.AUDIO)
+                launchApp(com.openlauncher.app.data.VehiclePresets.current().binding(
+                    if (radio) com.openlauncher.app.data.VehicleApp.RADIO else com.openlauncher.app.data.VehicleApp.MUSIC).packageName)
             }
         }
     }
@@ -593,7 +599,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun launchHardwareRadioApp() {
-        if (settings.value.radioPackage == com.openlauncher.app.data.OmodaDefaults.AUDIO) {
+        if (com.openlauncher.app.data.VehiclePresets.current().binding(com.openlauncher.app.data.VehicleApp.RADIO).launch ==
+            com.openlauncher.app.data.VehicleLaunch.DESAY_RADIO) {
             launchFactoryAudio(radio = true)
             return
         }

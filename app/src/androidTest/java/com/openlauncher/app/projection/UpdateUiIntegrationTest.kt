@@ -45,44 +45,23 @@ class UpdateUiIntegrationTest {
         assertTrue(target.performAction(AccessibilityNodeInfo.ACTION_CLICK))
         instrumentation.waitForIdleSync()
     }
-    @Test fun verifiedDownloadWithoutPermissionOffersAWorkingPermissionButton() {
-        var allowed = 0
+    private fun verifySingleInstallAction(ready: Boolean, canInstall: Boolean) {
         var installed = 0
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             scenario.onActivity { it.setContent { OpenLauncherTheme(accent = Color.White) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    UpdateSettingsContent(UpdateUiState(candidate = update, ready = true), {}, {}, { installed++ }, { allowed++ }, {}, {}, {}, {})
+                    UpdateSettingsContent(UpdateUiState(candidate = update, ready = ready, canInstall = canInstall),
+                        {}, { installed++ }, {}, {})
                 }
-            } } }
-            click("Allow installation")
-            assertEquals(1, allowed)
-            assertEquals(0, installed)
-            assertNull(find(automation.rootInActiveWindow, "Install update"))
-        }
-    }
-    @Test fun permittedDownloadedApkCanBeInstalledWithoutAnotherDownload() {
-        var installed = 0
-        var downloaded = 0
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            scenario.onActivity { it.setContent { OpenLauncherTheme(accent = Color.White) {
-                UpdateSettingsContent(UpdateUiState(candidate = update, ready = true, canInstall = true), {}, { downloaded++ }, { installed++ }, {}, {}, {}, {}, {})
             } } }
             click("Install update")
             assertEquals(1, installed)
-            assertEquals(0, downloaded)
+            assertNull(find(automation.rootInActiveWindow, "Allow installation"))
+            assertNull(find(automation.rootInActiveWindow, "Recheck and install"))
+            assertNull(find(automation.rootInActiveWindow, "Download update"))
         }
     }
-    @Test fun headUnitWithoutPermissionScreenOffersUsbSetupAndRecheck() {
-        var rechecked = 0
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            scenario.onActivity { it.setContent { OpenLauncherTheme(accent = Color.White) {
-                UpdateSettingsContent(UpdateUiState(candidate = update, ready = true, installationSetupNeeded = true),
-                    {}, {}, {}, {}, {}, {}, { rechecked++ }, {})
-            } } }
-            node("Set up update installation")
-            node("python3 tools/vehicle_usb.py setup")
-            click("Recheck and install")
-            assertEquals(1, rechecked)
-        }
-    }
+    @Test fun installUpdateStartsTheEntireFlowBeforeDownloading() = verifySingleInstallAction(false, false)
+    @Test fun installUpdateAlsoHandlesMissingPermissionForDownloadedApk() = verifySingleInstallAction(true, false)
+    @Test fun permittedDownloadedApkUsesTheSameInstallUpdateButton() = verifySingleInstallAction(true, true)
 }

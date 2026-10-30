@@ -77,23 +77,19 @@ fun NowPlayingWidget(
     onRadioSwitchAm: () -> Unit = {},
     onRadioTune: (band: String, freq: Float) -> Unit = { _, _ -> },
     onAssignRadio: () -> Unit = {},
-    radioPackage: String = ""
+    radioPackage: String = com.openlauncher.app.data.VehiclePresets.current().binding(com.openlauncher.app.data.VehicleApp.RADIO).packageName,
+    allowRadioAssignment: Boolean = true,
+    radioSessionPackages: Set<String> = setOf(radioPackage)
 ) {
     val context     = LocalContext.current
     val hasCarPlay  = carPlayPackage.isNotEmpty()
     val hasAutoApp  = androidAutoPackage.isNotEmpty()
     val hasContent  = state != null && state.title.isNotEmpty()
 
-    var selectedSource by rememberSaveable { mutableStateOf("Any Player") }
-
-    // Auto-switch to radio view when hardware radio is detected.
-    // Keyed on presence (not the state object) so freq/RDS updates don't
-    // keep forcing the radio view after the user picks "Any Player".
-    val hasHardwareRadio = hardwareRadio != null
-    LaunchedEffect(hasHardwareRadio) {
-        if (hasHardwareRadio) selectedSource = "FM/AM Radio"
-        else if (selectedSource == "FM/AM Radio") selectedSource = "Any Player"
-    }
+    var selectedSource by rememberSaveable { mutableStateOf("Automatic") }
+    val showRadio = com.openlauncher.app.model.showRadioInNowPlaying(selectedSource,
+        state?.isPlaying == true, state?.controller?.packageName,
+        hardwareRadio != null, radioSessionPackages + radioPackage)
 
     Box(
         modifier = modifier
@@ -101,7 +97,7 @@ fun NowPlayingWidget(
             .clip(RoundedCornerShape(4.dp))
     ) {
         // 1. CONDITIONAL VIEW TOGGLE
-        if (selectedSource == "FM/AM Radio") {
+        if (showRadio) {
             // Real-tuner radio deck — mirrors the MCU or the radio app's session
             Box(
                 modifier = Modifier
@@ -173,6 +169,10 @@ fun NowPlayingWidget(
                     modifier = Modifier.background(dropdownBg)
                 ) {
                     DropdownMenuItem(
+                        text = { Text("Automatic", color = dropdownText, fontSize = 11.sp) },
+                        onClick = { selectedSource = "Automatic"; menuExpanded = false }
+                    )
+                    DropdownMenuItem(
                         text = { Text("Any Player", color = dropdownText, fontSize = 11.sp) },
                         onClick = {
                             selectedSource = "Any Player"
@@ -188,7 +188,7 @@ fun NowPlayingWidget(
                         },
                         leadingIcon = { Icon(Icons.Default.Radio, null, tint = accent, modifier = Modifier.size(14.dp)) }
                     )
-                    DropdownMenuItem(
+                    if (allowRadioAssignment) DropdownMenuItem(
                         text = { Text("Change radio app", color = dropdownText, fontSize = 11.sp) },
                         onClick = { menuExpanded = false; onAssignRadio() },
                         enabled = !isEditing,

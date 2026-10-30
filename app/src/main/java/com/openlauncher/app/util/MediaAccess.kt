@@ -6,10 +6,24 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import android.service.notification.NotificationListenerService
 import com.openlauncher.app.diagnostics.DiagnosticLog
 import com.openlauncher.app.service.MediaListenerService
 
 object MediaAccess {
+    private var lastRebindAt = -30_000L
+
+    /** Restore an already granted connection after package replacement or a service death. */
+    fun ensureConnected(context: Context) {
+        MediaListenerService.requestRefresh()
+        if (Build.VERSION.SDK_INT < 24 || MediaListenerService.isConnected.value) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastRebindAt < 30_000 || !isGranted(context)) return
+        lastRebindAt = now
+        runCatching { NotificationListenerService.requestRebind(component(context)) }
+            .onFailure { DiagnosticLog.event("MediaAccess", "Listener rebind failed", it) }
+    }
+
     fun component(context: Context) = ComponentName(context, MediaListenerService::class.java)
 
     fun isGranted(context: Context): Boolean = runCatching {

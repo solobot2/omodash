@@ -7,9 +7,10 @@ import com.openlauncher.app.diagnostics.DiagnosticLog
 
 /** Desay's projection sessions implement onMediaButtonEvent, not transport callbacks. */
 object ProjectionMediaKeys {
-    private val packages = setOf("com.desaysv.vehicle.carplayapp", "com.google.android.projection.sink")
     fun dispatch(controller: MediaController, keyCode: Int): Boolean {
-        if (controller.packageName !in packages) return false
+        val binding = com.openlauncher.app.data.VehiclePresets.current().apps.values
+            .firstOrNull { it.packageName == controller.packageName }
+        if (binding?.mediaButtonEvents != true) return false
         val accepted = sendPair(controller, keyCode)
         DiagnosticLog.event("MediaCommand", "Projection key=$keyCode for ${controller.packageName}, down/up accepted=$accepted")
         // Do not follow a partially accepted press with a duplicate transport command.

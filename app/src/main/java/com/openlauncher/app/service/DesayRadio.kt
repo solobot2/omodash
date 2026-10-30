@@ -9,11 +9,13 @@ class DesayRadio(private val context: Context) {
     private var bus: Any? = null
     private var loader: ClassLoader? = null
     private var attempted = false
-    private var failed = false
+    private var retryAt = 0L
     private fun type(name: String) = checkNotNull(loader).loadClass("com.desaysv.ivi.vdb.$name")
     private fun initialize(): Boolean {
-        if (attempted) return bus != null
+        if (bus != null) return true
+        if (attempted && android.os.SystemClock.elapsedRealtime() < retryAt) return false
         attempted = true
+        retryAt = android.os.SystemClock.elapsedRealtime() + 15_000
         if (runCatching { context.packageManager.getPackageInfo("com.desaysv.ivi.vds.tuner", 0) }.isFailure) return false
         return runCatching {
             loader = context.createPackageContext("com.desaysv.launcher", Context.CONTEXT_INCLUDE_CODE or Context.CONTEXT_IGNORE_SECURITY).classLoader
@@ -26,6 +28,7 @@ class DesayRadio(private val context: Context) {
                 val value = serviceType.enumConstants!!.first { (it as Enum<*>).name == name }
                 cls.getMethod("bindService", serviceType).invoke(instance, value)
             }
+            retryAt = 0L
             DiagnosticLog.event("Radio", "Initialized installed Desay VDB client")
             true
         }.getOrElse {
@@ -43,7 +46,9 @@ class DesayRadio(private val context: Context) {
     }
 
     @Synchronized fun read(): HardwareRadioState? {
-        if (!initialize() || failed) return null
+        if (android.os.SystemClock.elapsedRealtime() < retryAt && bus != null) return null
+        if (!initialize()) return null
+        retryAt = 0L
         return runCatching {
             val source = value(393217, "media.bean.VDMediaType") ?: return null
             if ((source.javaClass.getMethod("getMediaType").invoke(source) as Int) !in setOf(8, 9, 10, 11, 12)) return null
@@ -59,7 +64,7 @@ class DesayRadio(private val context: Context) {
             HardwareRadioState(if (am) "AM" else "FM", if (am) freq.toString() else (freq / 1000f).toString(),
                 stationName = station?.takeIf { it.isNotBlank() }, isPlaying = playing, isDesay = true)
         }.getOrElse {
-            failed = true
+            retryAt = android.os.SystemClock.elapsedRealtime() + 5_000
             DiagnosticLog.event("Radio", "Desay VDB read failed; using media session", it)
             null
         }
@@ -114,5 +119,5 @@ class DesayRadio(private val context: Context) {
         true
     }.getOrElse { DiagnosticLog.event("Camera", "Factory camera request failed", it); false }
 
-    @Synchronized fun close() { bus?.let { runCatching { it.javaClass.getMethod("release").invoke(it) } }; bus = null; attempted = false; failed = false }
+    @Synchronized fun close() { bus?.let { runCatching { it.javaClass.getMethod("release").invoke(it) } }; bus = null; attempted = false; retryAt = 0L }
 }

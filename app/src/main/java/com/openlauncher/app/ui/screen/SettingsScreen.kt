@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.sp
 import com.openlauncher.app.data.AppFont
 import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.data.DayNightMode
+import com.openlauncher.app.data.VehiclePresets
+import com.openlauncher.app.data.withVehiclePreset
 import com.openlauncher.app.data.SidebarPosition
 import com.openlauncher.app.data.ShortcutConfig
 import com.openlauncher.app.data.GradientDirection
@@ -35,12 +37,16 @@ import com.openlauncher.app.data.UnitSystem
 import com.openlauncher.app.ui.theme.LocalDayMode
 import com.openlauncher.app.util.SunriseSunset
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import kotlinx.coroutines.delay
 import com.openlauncher.app.ui.components.ColorPickerDialog
 import com.openlauncher.app.ui.components.ConfirmDialog
 
 // Resolved at call site via LocalDayMode — see SettingsDivider / SettingsSection
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SettingsScreen(
     settings: AppSettings,
@@ -49,6 +55,8 @@ fun SettingsScreen(
     onReset: () -> Unit,
     onAssignCarPlay: () -> Unit,
     onAssignAndroidAuto: () -> Unit,
+    focusUpdates: Boolean = false,
+    onUpdatesFocused: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -74,6 +82,15 @@ fun SettingsScreen(
         }
     }
 
+    val scrollState = rememberScrollState()
+    val updateRequester = remember { BringIntoViewRequester() }
+    LaunchedEffect(focusUpdates) {
+        if (focusUpdates) {
+            snapshotFlow { scrollState.maxValue }.first { it > 0 && it != Int.MAX_VALUE }
+            updateRequester.bringIntoView()
+            onUpdatesFocused()
+        }
+    }
     val isDayMode = LocalDayMode.current
     val screenBg  = MaterialTheme.colorScheme.background
 
@@ -85,7 +102,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -196,6 +213,19 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(vertical = 8.dp)
             )
+            var mediaError by remember { mutableStateOf<String?>(null) }
+            SettingsButton(
+                label = if (mediaAllowed) "Reconnect media" else "Enable media access",
+                sublabel = "Restore Now Playing, station information and album art",
+                icon = Icons.Default.MusicNote, accent = accent,
+                onClick = {
+                    if (mediaAllowed) {
+                        com.openlauncher.app.util.MediaAccess.ensureConnected(context)
+                        mediaError = null
+                    } else mediaError = com.openlauncher.app.util.MediaAccess.openSettings(context)
+                    permissionRefresh++
+                })
+            mediaError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             SettingsDivider()
             SettingsButton(
                 label    = "Location Access",
@@ -224,6 +254,13 @@ fun SettingsScreen(
             )
         }
 
+        SettingsSection("Vehicle preset") {
+            com.openlauncher.app.ui.components.VehiclePresetSelector(settings.vehiclePresetId) { id ->
+                onUpdate { withVehiclePreset(id) }
+            }
+        }
+
+        if (VehiclePresets.find(settings.vehiclePresetId).allowsAppAssignment) {
         SettingsSection("Phone integration") {
             val carPlayLabel = remember(settings.carPlayPackage) {
                 selectedAppLabel(context, settings.carPlayPackage)
@@ -247,6 +284,8 @@ fun SettingsScreen(
                 accent = accent,
                 onClick = onAssignAndroidAuto
             )
+
+        }
 
         }
 
@@ -761,7 +800,9 @@ fun SettingsScreen(
 
         // ── Updates ──────────────────────────────────────────────────────────
         SettingsSection("Updates") {
-            com.openlauncher.app.update.UpdateSettingsPanel()
+            Box(Modifier.bringIntoViewRequester(updateRequester)) {
+                com.openlauncher.app.update.UpdateSettingsPanel()
+            }
         }
 
         // ── Maintenance ──────────────────────────────────────────────────────

@@ -19,6 +19,9 @@ internal class UpdateStore(context: Context) {
     var verified: Boolean
         get() = prefs.getBoolean("verified", false)
         set(value) { prefs.edit().putBoolean("verified", value).commit() }
+    var permissionSetupAttempted: Boolean
+        get() = prefs.getBoolean("permission_setup_attempted", false)
+        set(value) { prefs.edit().putBoolean("permission_setup_attempted", value).commit() }
     var installRequested: Boolean
         get() = prefs.getBoolean("install_requested", false)
         set(value) { prefs.edit().putBoolean("install_requested", value).commit() }
@@ -31,6 +34,9 @@ internal class UpdateStore(context: Context) {
     var autoConfirm: Boolean
         get() = prefs.getBoolean("auto_confirm", true)
         set(value) { prefs.edit().putBoolean("auto_confirm", value).commit() }
+    var legacyInstaller: Boolean
+        get() = prefs.getBoolean("legacy_installer", false)
+        set(value) { prefs.edit().putBoolean("legacy_installer", value).commit() }
     var sessionId: Int
         get() = prefs.getInt("session_id", -1)
         set(value) { prefs.edit().putInt("session_id", value).commit() }
@@ -70,7 +76,7 @@ internal class UpdateStore(context: Context) {
         if (info.versionCode <= installedVersion(app).first) {
             runCatching { apkFile().delete() }
             prefs.edit().remove("candidate").remove("download_id").remove("session_id")
-                .remove("error").putBoolean("verified", false).putBoolean("install_requested", false).commit()
+                .remove("error").remove("legacy_installer").remove("permission_setup_attempted").putBoolean("verified", false).putBoolean("install_requested", false).commit()
             disarm()
         }
     }

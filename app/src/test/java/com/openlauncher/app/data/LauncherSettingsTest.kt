@@ -18,13 +18,14 @@ class LauncherSettingsTest {
         assertEquals(5, moved.gridX)
         assertEquals(1, moved.spanX)
     }
-    @Test fun firmwareAssignmentsFillOnlyDefaultPlaceholders() {
-        val placeholder = ShortcutConfig(isDefault = true, defaultIcon = DefaultShortcutIcon.PHONE)
-        assertEquals(OmodaDefaults.PHONE, OmodaDefaults.shortcut(placeholder).packageName)
-        val custom = placeholder.copy(packageName = "my.phone")
-        assertEquals(custom, OmodaDefaults.shortcut(custom))
-        val blank = ShortcutConfig()
-        assertEquals(blank, OmodaDefaults.shortcut(blank))
+    @Test fun firmwareAssignmentsComeFromTheSelectedPreset() {
+        val settings = AppSettings(radioPackage = "old.radio").withVehiclePreset(VehiclePresets.OMODA_9_ID)
+        assertEquals("com.desaysv.svaudioapp", settings.radioPackage)
+        assertEquals("com.desaysv.bluetooth.phone", settings.shortcuts.last().packageName)
+        val generic = settings.withVehiclePreset(VehiclePresets.DEFAULT_ID)
+        assertTrue(generic.radioPackage.isEmpty())
+        assertTrue(generic.shortcuts.all { it.packageName.isEmpty() })
+        assertEquals("custom.radio", generic.copy(radioPackage = "custom.radio").withVehicleBindings().radioPackage)
     }
     @Test fun scalesStayBetween100And200IncludingOldInvalidValues() {
         assertEquals(1f, launcherScale(0.7f))

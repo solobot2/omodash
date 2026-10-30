@@ -39,6 +39,8 @@ import com.openlauncher.app.data.AppSettings
 @Composable
 fun OnboardingScreen(
     accent: Color,
+    presetId: String,
+    onSelectPreset: (String) -> Unit,
     onComplete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -95,7 +97,7 @@ fun OnboardingScreen(
                 results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         locationGranted = granted
         if (granted) {
-            currentStep = 2 // Auto-advance to next step
+            currentStep = 3 // Auto-advance to next step
         }
     }
 
@@ -157,9 +159,10 @@ fun OnboardingScreen(
                 // Step indicator list
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     StepItem(0, "Introduction", currentStep)
-                    StepItem(1, "Location Services", currentStep)
-                    StepItem(2, "Media Integration", currentStep)
-                    StepItem(3, "Ready to Go", currentStep)
+                    StepItem(1, "Vehicle Preset", currentStep)
+                    StepItem(2, "Location Services", currentStep)
+                    StepItem(3, "Media Integration", currentStep)
+                    StepItem(4, "Ready to Go", currentStep)
                 }
 
                 Text(
@@ -201,7 +204,11 @@ fun OnboardingScreen(
                     ) { step ->
                         when (step) {
                             0 -> IntroStep(accent)
-                            1 -> LocationStep(accent, locationGranted, onGrant = {
+                            1 -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Text("VEHICLE PRESET", color = accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                com.openlauncher.app.ui.components.VehiclePresetSelector(presetId, onSelectPreset)
+                            }
+                            2 -> LocationStep(accent, locationGranted, onGrant = {
                                 locationLauncher.launch(
                                     arrayOf(
                                         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -209,11 +216,11 @@ fun OnboardingScreen(
                                     )
                                 )
                             })
-                            2 -> MediaStep(accent, mediaGranted, onGrant = {
+                            3 -> MediaStep(accent, mediaGranted, onGrant = {
                                 mediaAccessError = com.openlauncher.app.util.MediaAccess.openSettings(context)
                                 mediaGranted = com.openlauncher.app.util.MediaAccess.isGranted(context)
                             })
-                            3 -> FinalStep(accent, onSetDefault = {
+                            4 -> FinalStep(accent, onSetDefault = {
                                 runCatching {
                                     context.startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
                                 }
@@ -248,26 +255,27 @@ fun OnboardingScreen(
                     // Next / Finish button (right aligned)
                     val isPrimary = when (currentStep) {
                         0 -> true
-                        1 -> locationGranted
-                        2 -> mediaGranted
-                        3 -> true
+                        1 -> true
+                        2 -> locationGranted
+                        3 -> mediaGranted
+                        4 -> true
                         else -> true
                     }
 
                     val nextButtonLabel = when (currentStep) {
                         0 -> "GET STARTED"
-                        1 -> if (locationGranted) "CONTINUE" else "SKIP FOR NOW"
-                        2 -> if (mediaGranted) "CONTINUE" else "SKIP FOR NOW"
-                        3 -> "FINISH SETUP"
+                        2 -> if (locationGranted) "CONTINUE" else "SKIP FOR NOW"
+                        3 -> if (mediaGranted) "CONTINUE" else "SKIP FOR NOW"
+                        4 -> "FINISH SETUP"
                         else -> "CONTINUE"
                     }
 
-                    val nextButtonIcon = if (currentStep == 3) Icons.Default.Check else Icons.Default.ArrowForward
+                    val nextButtonIcon = if (currentStep == 4) Icons.Default.Check else Icons.Default.ArrowForward
 
                     if (isPrimary) {
                         Button(
                             onClick = {
-                                if (currentStep < 3) {
+                                if (currentStep < 4) {
                                     currentStep++
                                 } else {
                                     onComplete()

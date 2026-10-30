@@ -26,7 +26,6 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
     private var windowFocused = false
     private var pollJob: Job? = null
     private var permissionsLoaded = false
-    private var installationSetupNeeded = false
     private var busy = false
     private var message = "Check for a newer version on GitHub"
 
@@ -77,7 +76,8 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
             val status = when {
                 download.running -> "Downloading ${candidate?.versionName.orEmpty()}"
                 installing -> "Opening the system installer"
-                ready && !canInstall -> "The update is downloaded. Allow installation to continue."
+                ready && !canInstall -> "The update is downloaded and verified. Press Install update to continue."
+                ready && store.legacyInstaller -> "Confirm installation in the Android system window. If it was closed, press Install update to retry."
                 ready -> "The update is ready to install"
                 else -> message
             }
@@ -88,14 +88,12 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 ready = ready, installing = installing,
                 canInstall = canInstall,
                 accessibilityEnabled = if (checkPermissions) UpdateAccessibilityService.isEnabled(app) else _state.value.accessibilityEnabled,
-                autoConfirm = store.autoConfirm, message = status, error = store.error,
-                installationSetupNeeded = installationSetupNeeded && !canInstall
+                autoConfirm = store.autoConfirm, message = status, error = store.error
             )
         }
         if (checkPermissions) {
             com.openlauncher.app.diagnostics.DiagnosticLog.event("UpdateSetup", "Permission check: install=${snapshot.canInstall}, helper=${snapshot.accessibilityEnabled}")
         }
-        if (snapshot.canInstall) installationSetupNeeded = false
         _state.value = snapshot
         if (!foreground || !windowFocused) return
         if (store.confirmationIntent != null) {
@@ -103,8 +101,16 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
                 UpdateInstaller.abandon(app)
                 store.error = it.message ?: "Cannot open the system installer"
             }
-        } else if (snapshot.ready && snapshot.canInstall && store.installRequested && store.sessionId < 0) {
-            install()
+        } else if (snapshot.ready && store.installRequested && store.sessionId < 0) {
+            when {
+                snapshot.canInstall -> stageInstallation()
+                !store.permissionSetupAttempted -> prepareInstallation()
+                else -> {
+                    store.installRequested = false
+                    store.error = "Installation was not allowed. Press Install update to retry."
+                    _state.value = _state.value.copy(error = store.error)
+                }
+            }
         }
     }
 
@@ -148,26 +154,34 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun download() {
+    /** The only installation entry point: download, access setup, verification and installation. */
+    fun install() {
         val candidate = _state.value.candidate ?: return
-        if (busy || _state.value.downloading || _state.value.installing) return
+        if (busy || !_state.value.installAvailable) return
+        store.installRequested = true
+        store.permissionSetupAttempted = false
+        store.error = null
         busy = true
         viewModelScope.launch {
             try {
-                withContext(Dispatchers.IO) { UpdateDownloads.start(app, candidate, installWhenReady = _state.value.canInstall) }
-                message = "Downloading ${candidate.versionName}"
+                if (!_state.value.ready) {
+                    withContext(Dispatchers.IO) { UpdateDownloads.start(app, candidate, installWhenReady = true) }
+                    message = "Downloading ${candidate.versionName}"
+                }
             } catch (error: Exception) {
-                store.error = error.message ?: "Cannot start the download"
+                store.installRequested = false
+                store.error = error.message ?: "Cannot start the update"
             } finally {
                 busy = false
-                refresh()
+                refresh(checkPermissions = true)
             }
         }
     }
 
-    fun install() {
+    private fun stageInstallation() {
         if (busy || !_state.value.ready || _state.value.installing) return
         busy = true
+        _state.value = _state.value.copy(installing = true, error = null)
         viewModelScope.launch {
             try {
                 withContext(Dispatchers.IO) { UpdateInstaller.stage(app) }
@@ -182,41 +196,36 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    /** Explicit continuation of a downloaded update, never an automatic settings popup loop. */
-    fun allowInstallation() {
-        if (busy || !_state.value.ready || _state.value.installing) return
-        if (Build.VERSION.SDK_INT < 26) { install(); return }
-        store.error = null
-        store.installRequested = true
-        // Only the return from this explicit action rechecks permission. Normal focus changes
-        // retain the permission latch to avoid repeated OEM permission queries/popups.
-        permissionsLoaded = false
-        val opened = com.openlauncher.app.util.DevicePermissionSetup.openSystemScreen(app,
-            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${app.packageName}")), "UpdateSetup")
-        if (opened) {
-            _state.value = _state.value.copy(error = null)
-        } else {
-            permissionsLoaded = true
-            installationSetupNeeded = true
-            _state.value = _state.value.copy(installationSetupNeeded = true, error = null)
-        }
-    }
-
-    fun dismissInstallationSetup() {
-        installationSetupNeeded = false
-        store.installRequested = false
-        _state.value = _state.value.copy(installationSetupNeeded = false)
-    }
-
-    fun recheckInstallationSetup() {
+    /** One attempt per Install update request; returning without access never opens a popup loop. */
+    private fun prepareInstallation() {
         if (busy) return
-        store.installRequested = true
-        store.error = null
+        busy = true
+        store.permissionSetupAttempted = true
+        _state.value = _state.value.copy(installing = true, error = null, message = "Preparing update installation…")
         viewModelScope.launch {
-            refresh(checkPermissions = true)
-            if (!_state.value.canInstall) {
-                store.error = "Installation is still not allowed. Complete the USB setup, then recheck."
-                _state.value = _state.value.copy(error = store.error)
+            val allowed = withContext(Dispatchers.IO) {
+                runCatching { LocalUpdateAccess.allow(app) }.onFailure {
+                    com.openlauncher.app.diagnostics.DiagnosticLog.event("UpdateSetup", "Local ADB setup unavailable", it)
+                }
+                UpdateInstaller.canInstall(app)
+            }
+            busy = false
+            if (allowed) {
+                refresh(checkPermissions = true)
+            } else {
+                val opened = Build.VERSION.SDK_INT >= 26 &&
+                    com.openlauncher.app.util.DevicePermissionSetup.openSystemScreen(app,
+                        Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${app.packageName}")), "UpdateSetup")
+                _state.value = _state.value.copy(installing = false)
+                if (opened) {
+                    permissionsLoaded = false
+                    message = "Confirm installation access in the Android system window. The update will continue automatically."
+                    _state.value = _state.value.copy(message = message)
+                } else {
+                    store.installRequested = false
+                    store.error = "Installation setup is unavailable. Authorize local TCP ADB or run tools/vehicle_usb.py setup from a USB-connected laptop, then press Install update again."
+                    refresh()
+                }
             }
         }
     }

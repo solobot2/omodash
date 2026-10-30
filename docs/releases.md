@@ -173,3 +173,11 @@ Production AA использует только помощник через ло
 открывается настройка только этого лаунчера; после возврата разрешение проверяется
 один раз. На прошивках с заглушкой показывается USB-инструкция и **Recheck and install**.
 Повторного скачивания не требуется. Периодический опрос разрешения не добавлен.
+
+## 0.0.17
+
+Vehicle presets OMODA 9 and Default are selected in onboarding and Settings. App defaults resolve VehiclePresets.current(); old package assignments are discarded. See [vehicle presets](vehicle-presets.md).
+
+Now Playing observes all media sessions and their metadata, including artwork changes with unchanged track labels. Standard vehicle shortcuts retain theme icons. Desay binding/read failures can retry.
+
+Android 11 uses the native INSTALL_PACKAGE/FileProvider route found in the saved JCT APK, with manual system confirmation. Newer Android retains PackageInstaller. The single Install update action downloads, verifies, prepares access and installs; it can use the locally authorized TCP ADB connection when no permission screen is available. See [JCT comparison](update-jct-comparison.md).

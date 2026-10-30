@@ -1,5 +1,6 @@
 package com.openlauncher.app.ui.screen
 
+import android.annotation.SuppressLint
 import android.content.res.Configuration
 import androidx.compose.animation.*
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -74,6 +75,7 @@ private val ALL_WIDGET_TYPES = listOf(
     WidgetTypeInfo("SOUNDBOARD",  "SOUNDBOARD",  Icons.Default.Piano,         "Custom sound pads")
 )
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun HomeScreen(
     settings: AppSettings,
@@ -417,7 +419,9 @@ fun HomeScreen(
                             onRadioSwitchAm       = onRadioSwitchAm,
                             onRadioTune           = onRadioTune,
                             onAssignRadio         = onAssignRadio,
-                            radioPackage          = settings.radioPackage
+                            radioPackage          = settings.radioPackage,
+                            allowRadioAssignment = com.openlauncher.app.data.VehiclePresets.find(settings.vehiclePresetId).allowsAppAssignment,
+                            radioSessionPackages = com.openlauncher.app.data.VehiclePresets.find(settings.vehiclePresetId).radioSessionPackages
                         )
                         "TELEMETRY" -> TelemetryWidget(
                             location  = location,

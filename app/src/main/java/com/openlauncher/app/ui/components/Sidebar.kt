@@ -38,6 +38,8 @@ import androidx.core.graphics.drawable.toBitmap
 import com.openlauncher.app.data.AppSettings
 import com.openlauncher.app.data.DefaultShortcutIcon
 import com.openlauncher.app.data.ShortcutConfig
+import com.openlauncher.app.data.themeIcon
+import com.openlauncher.app.data.VehiclePresets
 import com.openlauncher.app.model.NavDestination
 import com.openlauncher.app.ui.theme.LocalDayMode
 import kotlin.math.roundToInt
@@ -96,14 +98,16 @@ fun Sidebar(
             ShortcutSlot(
                 shortcut        = shortcut,
                 accent          = accent,
-                resolvedIcon    = if (shortcut.packageName.isNotEmpty())
+                resolvedIcon    = if (shortcut.themeIcon == null && shortcut.packageName.isNotEmpty())
                                       installedIconFor(shortcut.packageName) else null,
                 isDragging      = isDragging,
                 dragTranslation = translation,
                 isHorizontal    = isHorizontal,
                 onClick         = { onShortcutClick(index) },
                 onLongPress     = {
-                    if (shortcut.packageName.isNotEmpty()) {
+                    if (shortcut.isDefault && !VehiclePresets.find(settings.vehiclePresetId).allowsAppAssignment) {
+                        // Vehicle app bindings and theme icons are owned by the preset.
+                    } else if (shortcut.packageName.isNotEmpty()) {
                         actionSheetSlot = index
                     } else {
                         onShortcutLongPress(index)
@@ -223,6 +227,7 @@ fun Sidebar(
     actionSheetSlot?.let { slot ->
         ShortcutActionDialog(
             accent      = accent,
+            allowIconCustomization = settings.shortcuts.getOrNull(slot)?.isDefault != true,
             onChangeApp = {
                 actionSheetSlot = null
                 onShortcutLongPress(slot)
@@ -243,7 +248,7 @@ fun Sidebar(
     iconPickerSlot?.let { slot ->
         IconPickerDialog(
             accent          = accent,
-            hasNativeIcon   = settings.shortcuts.getOrNull(slot)?.packageName?.isNotEmpty() == true,
+            hasNativeIcon   = settings.shortcuts.getOrNull(slot)?.let { !it.isDefault && it.packageName.isNotEmpty() } == true,
             currentOverride = settings.shortcuts.getOrNull(slot)?.customIconOverride,
             onPick  = { icon ->
                 iconPickerSlot = null
@@ -328,7 +333,7 @@ private fun ShortcutSlot(
             }
     ) {
         val iconInactive = if (LocalDayMode.current) Color(0xFF777777) else Color(0xFF3A3A3A)
-        val override = shortcut.customIconOverride
+        val override = shortcut.themeIcon
         when {
             override != null && override != DefaultShortcutIcon.NONE -> {
                 Icon(
@@ -372,6 +377,7 @@ private fun ShortcutSlot(
 @Composable
 private fun ShortcutActionDialog(
     accent: Color,
+    allowIconCustomization: Boolean,
     onChangeApp: () -> Unit,
     onCustomizeIcon: () -> Unit,
     onRemove: () -> Unit,
@@ -388,8 +394,10 @@ private fun ShortcutActionDialog(
         ) {
             ActionRow("CHANGE APP",     Icons.Default.SwapHoriz, accent, onChangeApp)
             HorizontalDivider(color = Color(0xFF1A1A1A))
-            ActionRow("CUSTOMIZE ICON", Icons.Default.Palette,   accent, onCustomizeIcon)
-            HorizontalDivider(color = Color(0xFF1A1A1A))
+            if (allowIconCustomization) {
+                ActionRow("CUSTOMIZE ICON", Icons.Default.Palette, accent, onCustomizeIcon)
+                HorizontalDivider(color = Color(0xFF1A1A1A))
+            }
             ActionRow("REMOVE",         Icons.Default.Delete,     Color(0xFF993333), onRemove)
         }
     }

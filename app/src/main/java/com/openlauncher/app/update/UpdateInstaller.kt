@@ -10,6 +10,12 @@ import android.os.Build
 import com.openlauncher.app.MainActivity
 
 internal object UpdateInstaller {
+    fun hasPendingInstallation(context: Context): Boolean {
+        val store = UpdateStore(context)
+        return store.installRequested &&
+            store.candidate?.let { it.versionCode > installedVersion(context).first } == true
+    }
+
     fun canInstall(context: Context): Boolean = Build.VERSION.SDK_INT < 26 || runCatching {
         context.packageManager.canRequestPackageInstalls()
     }.onFailure { com.openlauncher.app.diagnostics.DiagnosticLog.event("UpdateSetup", "Cannot check app installation access", it) }.getOrDefault(false)
@@ -24,6 +30,21 @@ internal object UpdateInstaller {
         store.disarm()
         store.error = null
         store.installRequested = false
+        if (Build.VERSION.SDK_INT <= 30) {
+            // JCT's non-DeviceOwner path on the owner's Android 11 firmware.
+            // Keep the file verified and use a temporary read-only content grant.
+            val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.diagnostics", file)
+            val confirmation = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                clipData = android.content.ClipData.newRawUri("Omodash update", uri)
+            }
+            store.sessionId = -1
+            store.legacyInstaller = true
+            store.confirmationIntent = confirmation.toUri(Intent.URI_INTENT_SCHEME)
+            return
+        }
+        store.legacyInstaller = false
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(context.packageName)
@@ -63,12 +84,21 @@ internal object UpdateInstaller {
         val store = UpdateStore(context)
         val serialized = store.confirmationIntent ?: return
         val pending = Intent.parseUri(serialized, 0)
+        if (store.legacyInstaller) {
+            val expected = androidx.core.content.FileProvider.getUriForFile(context,
+                "${context.packageName}.diagnostics", store.apkFile())
+            check(pending.action == Intent.ACTION_INSTALL_PACKAGE && pending.data == expected) { "Unexpected update APK URI" }
+            pending.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            pending.clipData = android.content.ClipData.newRawUri("Omodash update", expected)
+        }
         val activity = context.packageManager.resolveActivity(pending, 0)?.activityInfo
             ?: error("The system installer is not available")
         val system = activity.applicationInfo.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
         check(system && activity.packageName in installerPackages) { "Unexpected installation confirmation app" }
         store.confirmationIntent = null
-        store.arm(activity.packageName)
+        // Accessibility automation remains restricted to owned PackageInstaller sessions.
+        // Android 11's direct installer is confirmed in its system window.
+        if (!store.legacyInstaller) store.arm(activity.packageName)
         context.startActivity(pending.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
@@ -115,8 +145,9 @@ class UpdateInstallReceiver : BroadcastReceiver() {
 class UpdateReplacedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        com.openlauncher.app.util.MediaAccess.ensureConnected(context)
         val store = UpdateStore(context)
-        val wasSelfUpdate = store.sessionId >= 0 && store.candidate?.let { it.versionCode <= installedVersion(context).first } == true
+        val wasSelfUpdate = (store.sessionId >= 0 || store.legacyInstaller) && store.candidate?.let { it.versionCode <= installedVersion(context).first } == true
         store.clearFinishedUpdate()
         if (wasSelfUpdate) {
             // Some head units allow this. Home remains the fallback when the OS

@@ -7,8 +7,9 @@ object AppLaunchIntent {
     fun resolve(context: Context, packageName: String): Intent? {
         if (packageName.isBlank()) return null
         val pm = context.packageManager
-        val vendor = if (packageName == "com.desaysv.vehicle.carplayapp")
-            Intent("action.start.carplay").setPackage(packageName) else null
+        val action = com.openlauncher.app.data.VehiclePresets.current().apps.values
+            .firstOrNull { it.packageName == packageName }?.intentAction
+        val vendor = action?.let { Intent(it).setPackage(packageName) }
         val intent = vendor?.takeIf { it.resolveActivity(pm) != null }
             ?: pm.getLaunchIntentForPackage(packageName)
             ?: pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).setPackage(packageName), 0).firstOrNull()

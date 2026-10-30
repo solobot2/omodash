@@ -21,6 +21,10 @@ import androidx.compose.ui.unit.Density
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.openlauncher.app.data.DayNightMode
+import com.openlauncher.app.data.VehiclePresets
+import com.openlauncher.app.data.VehicleLaunch
+import com.openlauncher.app.data.vehicleApp
+import com.openlauncher.app.data.withVehiclePreset
 import com.openlauncher.app.data.SidebarPosition
 import com.openlauncher.app.data.GradientDirection
 import com.openlauncher.app.model.NavDestination
@@ -32,6 +36,7 @@ import com.openlauncher.app.viewmodel.LauncherViewModel
 class MainActivity : ComponentActivity() {
 
     private val vm: LauncherViewModel by viewModels()
+    private var restoreUpdates = false
 
     private val locationPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -58,6 +63,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        restoreUpdates = com.openlauncher.app.update.UpdateInstaller.hasPendingInstallation(this)
+        if (restoreUpdates) vm.navigate(NavDestination.SETTINGS)
         com.openlauncher.app.util.LauncherExit.restoreComponents(this)
         hideSystemBars()
 
@@ -136,6 +143,8 @@ class MainActivity : ComponentActivity() {
                 if (!settings.onboardingCompleted) {
                     OnboardingScreen(
                         accent = accent,
+                        presetId = settings.vehiclePresetId,
+                        onSelectPreset = { id -> vm.updateSettings { withVehiclePreset(id) } },
                         onComplete = {
                             vm.updateSettings { copy(onboardingCompleted = true) }
                             // Start location updates immediately upon completion
@@ -185,13 +194,16 @@ class MainActivity : ComponentActivity() {
                                         closeProjection()
                                         val shortcut = settings.shortcuts[slot]
                                         if (shortcut.packageName.isNotEmpty()) {
-                                            if (shortcut.defaultIcon == com.openlauncher.app.data.DefaultShortcutIcon.CAMERA &&
-                                                shortcut.packageName == com.openlauncher.app.data.OmodaDefaults.CAMERA) vm.launchCamera()
-                                            else if (shortcut.packageName == com.openlauncher.app.data.OmodaDefaults.AUDIO &&
-                                                shortcut.defaultIcon in setOf(com.openlauncher.app.data.DefaultShortcutIcon.RADIO, com.openlauncher.app.data.DefaultShortcutIcon.MUSIC))
-                                                vm.launchFactoryAudio(shortcut.defaultIcon == com.openlauncher.app.data.DefaultShortcutIcon.RADIO)
-                                            else vm.launchApp(shortcut.packageName)
-                                        }
+                                            val binding = shortcut.defaultIcon.vehicleApp()?.let {
+                                                VehiclePresets.find(settings.vehiclePresetId).binding(it)
+                                            }
+                                            when (binding?.launch) {
+                                                VehicleLaunch.DESAY_CAMERA -> vm.launchCamera()
+                                                VehicleLaunch.DESAY_RADIO -> vm.launchFactoryAudio(true)
+                                                VehicleLaunch.DESAY_MUSIC -> vm.launchFactoryAudio(false)
+                                                else -> vm.launchApp(shortcut.packageName)
+                                            }
+                                        } else vm.startShortcutPicker(slot)
                                     },
                                     onShortcutLongPress  = { slot -> vm.startShortcutPicker(slot) },
                                     onShortcutRemove     = { slot -> vm.removeShortcut(slot) },
@@ -287,7 +299,9 @@ class MainActivity : ComponentActivity() {
                                         onUpdate = { block -> vm.updateSettings(block) },
                                         onReset  = { vm.resetSettings() },
                                         onAssignCarPlay = { vm.startCarPlayPicker() },
-                                        onAssignAndroidAuto = { vm.startAndroidAutoPicker() }
+                                        onAssignAndroidAuto = { vm.startAndroidAutoPicker() },
+                                        focusUpdates = restoreUpdates,
+                                        onUpdatesFocused = { restoreUpdates = false }
                                     )
                                 }
                             }
@@ -330,6 +344,7 @@ class MainActivity : ComponentActivity() {
         com.openlauncher.app.diagnostics.DiagnosticLog.event("Activity", "Resumed")
         vm.refreshConnectivity()
         vm.refreshMedia()
+        com.openlauncher.app.util.MediaAccess.ensureConnected(this)
     }
 
     override fun onStop() {

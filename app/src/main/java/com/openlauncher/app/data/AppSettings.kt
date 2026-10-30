@@ -46,7 +46,7 @@ data class ShortcutConfig(
     val label: String = "",
     val isDefault: Boolean = false,
     val defaultIcon: DefaultShortcutIcon = DefaultShortcutIcon.NONE,
-    // null = native app icon; non-null = override with this vector icon
+    // Custom slots: null = native icon; predefined types always use their theme icon.
     val customIconOverride: DefaultShortcutIcon? = null
 )
 
@@ -63,6 +63,7 @@ data class WidgetConfig(
 )
 
 data class AppSettings(
+    val vehiclePresetId: String = VehiclePresets.current().id,
     val vehicleName: String = "MY CAR",
     val accentColor: Int = Color.White.toArgb(),
     val backgroundColor: Int = Color.Black.toArgb(),
@@ -78,10 +79,10 @@ data class AppSettings(
     val showClock: Boolean = true,
     val showTelemetry: Boolean = true,
     val showNowPlaying: Boolean = true,
-    val shortcuts: List<ShortcutConfig> = defaultShortcuts(),
+    val shortcuts: List<ShortcutConfig> = VehiclePresets.current().shortcuts(),
     val widgetLayout: List<WidgetConfig> = defaultWidgetLayout(),
-    val carPlayPackage: String = OmodaDefaults.CARPLAY,
-    val androidAutoPackage: String = OmodaDefaults.ANDROID_AUTO,
+    val carPlayPackage: String = VehiclePresets.current().binding(VehicleApp.CARPLAY).packageName,
+    val androidAutoPackage: String = VehiclePresets.current().binding(VehicleApp.ANDROID_AUTO).packageName,
     val useGradient: Boolean = false,
     val gradientEndColor: Int = Color.Black.toArgb(),
     val wallpaperDim: Float = 0.55f,
@@ -90,8 +91,8 @@ data class AppSettings(
     val showAltimeter: Boolean = false,
     val showSpeedometer: Boolean = false,
     val dayNightMode: DayNightMode = DayNightMode.DARK,
-    // Head unit's radio app — mirrored & controlled via its MediaSession
-    val radioPackage: String = OmodaDefaults.AUDIO,
+    // Current preset radio (or a manual assignment in Default).
+    val radioPackage: String = VehiclePresets.current().binding(VehicleApp.RADIO).packageName,
     val onboardingCompleted: Boolean = false,
     val showVitals: Boolean = false,
     val showTripTracker: Boolean = false,
@@ -104,12 +105,7 @@ data class AppSettings(
     val useCustomBackgroundColor: Boolean = false
 )
 
-fun defaultShortcuts() = listOf(
-    ShortcutConfig(packageName = OmodaDefaults.AUDIO, label = "Radio", isDefault = true, defaultIcon = DefaultShortcutIcon.RADIO),
-    ShortcutConfig(packageName = OmodaDefaults.CAMERA, label = "Camera", isDefault = true, defaultIcon = DefaultShortcutIcon.CAMERA),
-    ShortcutConfig(packageName = OmodaDefaults.AUDIO, label = "Music", isDefault = true, defaultIcon = DefaultShortcutIcon.MUSIC),
-    ShortcutConfig(packageName = OmodaDefaults.PHONE, label = "Phone", isDefault = true, defaultIcon = DefaultShortcutIcon.PHONE)
-)
+fun defaultShortcuts() = VehiclePresets.current().shortcuts()
 
 fun defaultWidgetLayout() = listOf(
     WidgetConfig("CLOCK",       gridX = 0, gridY = 0, spanX = 2, spanY = 1),

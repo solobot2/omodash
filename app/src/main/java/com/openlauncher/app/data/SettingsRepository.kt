@@ -18,6 +18,7 @@ class SettingsRepository(private val context: Context) {
     private val gson = Gson()
 
     private object Keys {
+        val VEHICLE_PRESET = stringPreferencesKey("vehicle_preset")
         val VEHICLE_NAME       = stringPreferencesKey("vehicle_name")
         val ACCENT_COLOR       = intPreferencesKey("accent_color")
         val BG_COLOR           = intPreferencesKey("bg_color")
@@ -35,11 +36,11 @@ class SettingsRepository(private val context: Context) {
         val SHOW_NOW_PLAYING   = booleanPreferencesKey("show_now_playing")
         val SHOW_ALTIMETER     = booleanPreferencesKey("show_altimeter")
         val SHOW_SPEEDOMETER   = booleanPreferencesKey("show_speedometer")
-        val SHORTCUTS_JSON     = stringPreferencesKey("shortcuts_json")
+        val SHORTCUTS_JSON     = stringPreferencesKey("preset_shortcuts_json")
         val WIDGET_GRID_VERSION = intPreferencesKey("widget_grid_version")
         val WIDGET_LAYOUT_JSON = stringPreferencesKey("widget_layout_json")
-        val CAR_PLAY_PACKAGE      = stringPreferencesKey("car_play_package")
-        val ANDROID_AUTO_PACKAGE  = stringPreferencesKey("android_auto_package")
+        val CAR_PLAY_PACKAGE      = stringPreferencesKey("preset_car_play_package")
+        val ANDROID_AUTO_PACKAGE  = stringPreferencesKey("preset_android_auto_package")
         val USE_GRADIENT          = booleanPreferencesKey("use_gradient")
         val GRADIENT_END_COLOR    = intPreferencesKey("gradient_end_color")
         val WALLPAPER_DIM         = floatPreferencesKey("wallpaper_dim")
@@ -47,7 +48,7 @@ class SettingsRepository(private val context: Context) {
         val SIDEBAR_POSITION           = stringPreferencesKey("sidebar_position")
         val BOTTOM_BAR_SHORTCUTS_RIGHT = booleanPreferencesKey("bottom_bar_shortcuts_right")
         val DAY_NIGHT_MODE        = stringPreferencesKey("day_night_mode")
-        val RADIO_PACKAGE         = stringPreferencesKey("radio_package")
+        val RADIO_PACKAGE         = stringPreferencesKey("preset_radio_package")
         val ONBOARDING_COMPLETED  = booleanPreferencesKey("onboarding_completed")
         val SHOW_VITALS           = booleanPreferencesKey("show_vitals")
         val SHOW_TRIP_TRACKER     = booleanPreferencesKey("show_trip_tracker")
@@ -65,6 +66,7 @@ class SettingsRepository(private val context: Context) {
         .map { prefs -> readSettings(prefs) }
 
     private fun readSettings(prefs: Preferences): AppSettings {
+            VehiclePresets.select(prefs[Keys.VEHICLE_PRESET] ?: VehiclePresets.DEFAULT_ID)
             val defaults = AppSettings()
             val shortcutsJson = prefs[Keys.SHORTCUTS_JSON]
             val shortcuts = if (shortcutsJson != null) {
@@ -88,6 +90,7 @@ class SettingsRepository(private val context: Context) {
             } else defaults.widgetLayout
 
             return AppSettings(
+                vehiclePresetId = defaults.vehiclePresetId,
                 vehicleName    = prefs[Keys.VEHICLE_NAME]     ?: defaults.vehicleName,
                 accentColor    = prefs[Keys.ACCENT_COLOR]     ?: defaults.accentColor,
                 backgroundColor = prefs[Keys.BG_COLOR]        ?: defaults.backgroundColor,
@@ -105,10 +108,10 @@ class SettingsRepository(private val context: Context) {
                 showNowPlaying = prefs[Keys.SHOW_NOW_PLAYING] ?: defaults.showNowPlaying,
                 showAltimeter   = prefs[Keys.SHOW_ALTIMETER]   ?: defaults.showAltimeter,
                 showSpeedometer = prefs[Keys.SHOW_SPEEDOMETER] ?: defaults.showSpeedometer,
-                shortcuts      = shortcuts.map(OmodaDefaults::shortcut),
+                shortcuts      = shortcuts,
                 widgetLayout   = widgets,
-                carPlayPackage      = prefs[Keys.CAR_PLAY_PACKAGE]?.takeIf { it.isNotBlank() && it != "com.omodash.aareceiver" } ?: defaults.carPlayPackage,
-                androidAutoPackage  = prefs[Keys.ANDROID_AUTO_PACKAGE]?.takeIf { it.isNotBlank() && it != "com.omodash.aareceiver" } ?: defaults.androidAutoPackage,
+                carPlayPackage      = prefs[Keys.CAR_PLAY_PACKAGE] ?: defaults.carPlayPackage,
+                androidAutoPackage  = prefs[Keys.ANDROID_AUTO_PACKAGE] ?: defaults.androidAutoPackage,
                 useGradient      = prefs[Keys.USE_GRADIENT]        ?: defaults.useGradient,
                 gradientEndColor = prefs[Keys.GRADIENT_END_COLOR]  ?: defaults.gradientEndColor,
                 wallpaperDim     = prefs[Keys.WALLPAPER_DIM]       ?: defaults.wallpaperDim,
@@ -116,7 +119,7 @@ class SettingsRepository(private val context: Context) {
                                    ?: if (prefs[Keys.RIGHT_HAND_DRIVE] == true) SidebarPosition.RIGHT else defaults.sidebarPosition,
                 bottomBarShortcutsRight = prefs[Keys.BOTTOM_BAR_SHORTCUTS_RIGHT] ?: defaults.bottomBarShortcutsRight,
                 dayNightMode     = prefs[Keys.DAY_NIGHT_MODE]?.let { runCatching { DayNightMode.valueOf(it) }.getOrNull() } ?: defaults.dayNightMode,
-                radioPackage     = prefs[Keys.RADIO_PACKAGE]?.takeIf { it.isNotBlank() && it != "com.omodash.aareceiver" } ?: defaults.radioPackage,
+                radioPackage     = prefs[Keys.RADIO_PACKAGE] ?: defaults.radioPackage,
                 onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: defaults.onboardingCompleted,
                 showVitals       = prefs[Keys.SHOW_VITALS]      ?: defaults.showVitals,
                 showTripTracker  = prefs[Keys.SHOW_TRIP_TRACKER] ?: defaults.showTripTracker,
@@ -131,7 +134,7 @@ class SettingsRepository(private val context: Context) {
                 speedometerDigitalOnly = prefs[Keys.SPEEDOMETER_DIGITAL_ONLY] ?: defaults.speedometerDigitalOnly,
                 gradientDirection = prefs[Keys.GRADIENT_DIRECTION]?.let { runCatching { GradientDirection.valueOf(it) }.getOrNull() } ?: defaults.gradientDirection,
                 useCustomBackgroundColor = prefs[Keys.USE_CUSTOM_BG_COLOR] ?: defaults.useCustomBackgroundColor
-            ).withValidWidgetLayout()
+            ).withVehicleBindings().withValidWidgetLayout()
     }
 
     suspend fun saveSettings(s: AppSettings) {
@@ -147,7 +150,9 @@ class SettingsRepository(private val context: Context) {
     }
 
     private fun writeSettings(prefs: MutablePreferences, settings: AppSettings) {
-            val s = settings.withValidWidgetLayout()
+            val s = settings.withVehicleBindings().withValidWidgetLayout()
+            VehiclePresets.select(s.vehiclePresetId)
+            prefs[Keys.VEHICLE_PRESET] = s.vehiclePresetId
             prefs[Keys.VEHICLE_NAME]       = s.vehicleName
             prefs[Keys.ACCENT_COLOR]       = s.accentColor
             prefs[Keys.BG_COLOR]           = s.backgroundColor

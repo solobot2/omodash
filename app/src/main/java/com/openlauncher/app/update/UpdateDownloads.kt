@@ -50,6 +50,8 @@ internal object UpdateDownloads {
         store.downloadId = -1
         store.verified = false
         store.installRequested = false
+        store.permissionSetupAttempted = false
+        store.legacyInstaller = false
         store.disarm()
     }
 
