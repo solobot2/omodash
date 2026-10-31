@@ -1,6 +1,6 @@
 # Release v0.0.3: The Instrument Panel Update
 
-This release transforms OpenLauncher from a capable launcher into a proper in-car instrument panel. Everything that was rough around the edges has been refined, and a batch of new purpose-built widgets make this feel like software designed for the car — not adapted for it.
+This release transforms Omodash from a capable launcher into a proper in-car instrument panel. Everything that was rough around the edges has been refined, and a batch of new purpose-built widgets make this feel like software designed for the car — not adapted for it.
 
 ---
 

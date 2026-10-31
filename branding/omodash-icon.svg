@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Omodash OD monogram</title>
+  <desc>An emerald O with chamfered left corners and square right corners joins an orange D. Their neon light mixes additively along the shared upright.</desc>
+  <defs>
+    <linearGradient id="emerald" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#67FFD2"/>
+      <stop offset="0.38" stop-color="#13DCA2"/>
+      <stop offset="1" stop-color="#28F3B8"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#FFC47F"/>
+      <stop offset="0.42" stop-color="#FF9D38"/>
+      <stop offset="1" stop-color="#FFB45F"/>
+    </linearGradient>
+    <filter id="halo" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <path id="letter-o" d="M286 302H504V722H286L220 656V368Z"/>
+    <path id="letter-d" d="M504 302H640C746 302 814 382 814 488V536C814 642 746 722 640 722H504Z"/>
+  </defs>
+  <path id="background" fill="#000000" d="M0 0H1024V1024H0Z"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <use href="#letter-d" stroke="#FF9D38" stroke-width="34" opacity="0.46" filter="url(#halo)"/>
+    <use href="#letter-d" stroke="#FF9D38" stroke-width="24" opacity="0.95" filter="url(#glow)"/>
+    <use href="#letter-d" stroke="url(#orange)" stroke-width="21"/>
+    <use href="#letter-d" stroke="#FFEACF" stroke-width="4" opacity="0.86"/>
+  </g>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="miter" style="mix-blend-mode:screen">
+    <use href="#letter-o" stroke="#13DCA2" stroke-width="34" opacity="0.46" filter="url(#halo)"/>
+    <use href="#letter-o" stroke="#13DCA2" stroke-width="24" opacity="0.95" filter="url(#glow)"/>
+    <use href="#letter-o" stroke="url(#emerald)" stroke-width="21"/>
+    <use href="#letter-o" stroke="#D2FFF0" stroke-width="4" opacity="0.86"/>
+  </g>
+</svg>

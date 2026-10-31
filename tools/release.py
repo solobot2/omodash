@@ -158,7 +158,7 @@ def usb_bundle(out):
 def prepare_assets(version, code):
     metadata = json.loads((ROOT / "app/build/outputs/apk/release/output-metadata.json").read_text())
     element = metadata["elements"][0]
-    if metadata["applicationId"] != "com.openlauncher.app":
+    if metadata["applicationId"] != "win.solobot.omodash":
         raise RuntimeError("Refusing to publish a debug or update-test package")
     if element["versionCode"] != code or element["versionName"] != version:
         raise RuntimeError("APK version does not match the release")

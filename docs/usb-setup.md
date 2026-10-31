@@ -17,8 +17,9 @@ ADB в стандартном SDK. На Windows ищет PATH, ANDROID_HOME и L
    python3 tools/vehicle_usb.py setup
    ```
 
-4. Дождаться `OK` у всех проверок. Если есть `НЕТ` или `ОШИБКА`, настройка
-   не считается завершённой: скрипт возвращает код 1 и объясняет проблему.
+4. Дождаться `OK` у всех проверок прав и результата попытки включить TCP ADB
+   на порту 5555. Если есть `НЕТ` или `ОШИБКА`, скрипт возвращает код 1 и объясняет
+   проблему. Результаты выдачи прав и включения TCP ADB выводятся отдельно.
 5. В лаунчере открыть Settings → Updates → Check updates. Автоподтверждение
    регулируется переключателем Automatically confirm this launcher's updates.
 6. Права должны сохраняться при обычном обновлении APK с тем же сертификатом.
@@ -31,13 +32,21 @@ ADB в стандартном SDK. На Windows ищет PATH, ANDROID_HOME и L
 
 ## Что меняет setup
 
-Только для `com.openlauncher.app` и активного пользователя Android:
+Права выдаются только для `win.solobot.omodash` и активного пользователя Android:
 
 - WRITE_SECURE_SETTINGS и READ_LOGS — служебная настройка и диагностика.
 - ACCESS_FINE_LOCATION / ACCESS_COARSE_LOCATION — GPS, компас и погода.
 - Реальное одобрение MediaListenerService через NotificationManager.
 - Включение UpdateAccessibilityService с сохранением остальных сервисов.
 - REQUEST_INSTALL_PACKAGES через AppOps — установка собственных обновлений.
+
+В конце `setup` также пробует включить TCP ADB на порту 5555 для локального
+помощника Android Auto. Это общая настройка `adbd` на ГУ. Скрипт выводит ответ
+`adb tcpip`, ждёт возврата того же USB-устройства до 15 секунд и читает
+`service.adb.tcp.port` и `init.svc.adbd`. `OK` означает, что команда выполнена,
+порт настроен и `adbd` запущен; доступность сокета и авторизация ключа Omodash
+проверяются при открытии Android Auto в приложении. Попытка выполняется и при
+ошибке выдачи отдельных прав, но общий код завершения остаётся 1.
 
 Скрипт открывает наш MainActivity и через защищённый приёмник восстанавливает
 собственные компоненты, в том числе оставшиеся отключёнными после остановки
@@ -50,7 +59,7 @@ PackageManager, AppOps, одобрение и живое подключение 
 через защищённый DUMP-разрешением приёмник (включая canRequestPackageInstalls). Запись в Settings.Secure сама по себе не считается
 подтверждением доступа к медиа. Повторный запуск допустим.
 
-Нет root, смены Device Owner, включения TCP ADB, установки/удаления APK,
+Нет root, смены Device Owner, установки/удаления APK,
 очистки данных, смены default Home или изменений прав штатных приложений.
 Не выдаются микрофон, body sensors, доступ ко всем файлам и прочие права,
 не нужные для этих функций. Настройка не включает GPS глобально, если он выключен
@@ -114,7 +123,8 @@ APK, установка через ADB, запуск init-настройки п�
 
 ## Android Auto в области плиток (0.0.14+)
 
-После обычной настройки выполните по USB:
+Обычный `setup` уже пробует включить TCP ADB. Чтобы повторить только этот шаг,
+выполните по USB:
 
 ```sh
 python3 tools/vehicle_usb.py enable-android-auto
@@ -125,3 +135,43 @@ python3 tools/vehicle_usb.py enable-android-auto
 Откройте Android Auto в лаунчере и разрешите его ключ в запросе USB-отладки.
 После полного перезапуска ГУ команда может потребоваться повторно.
 Скрипт не устанавливает постоянные свойства adbd.
+
+## Запуск с Android-телефона
+
+Тот же Python-скрипт можно запускать из Termux, если телефон поддерживает USB Host
+(OTG). Нужны Termux и Termux:API из одного источника, Python и
+[termux-adb с поддержкой USB без root](https://github.com/nohajc/termux-adb).
+Установите `termux-adb` по README его автора. Обычный ADB из `android-tools`
+на телефоне без root не получает прямого доступа к USB-устройствам.
+
+Включите USB ADB на ГУ своей флешкой, подключите телефон в роли USB Host
+кабелем/OTG-переходником с передачей данных. Разрешите доступ к USB на телефоне
+и подтвердите новый ключ отладки на ГУ. Распакуйте набор USB-tools на телефоне
+и из его корня выполните в Termux:
+
+```sh
+pkg install python
+termux-adb devices -l
+python3 tools/vehicle_usb.py setup --adb "$(command -v termux-adb)"
+```
+
+`--adb` явно выбирает USB-совместимый `termux-adb`. Ноутбук при таком подключении
+не нужен. Скрипт использует стандартную библиотеку Python; запуск через Termux
+на конкретном телефоне и нашем ГУ пока не проверен.
+
+Для восстановления только медиа можно использовать Bugjaeger на телефоне по USB
+и выполнить в его удалённой shell, **без префикса `adb shell`**:
+
+```sh
+user_id=$(am get-current-user)
+cmd notification allow_listener win.solobot.omodash/win.solobot.omodash.service.MediaListenerService "$user_id"
+am start --user "$user_id" -n win.solobot.omodash/win.solobot.omodash.MainActivity
+```
+
+Это повторно одобряет доступ Omodash к уведомлениям/медиасессиям, но не заменяет
+полную проверку `setup`. Удаление приложения также удаляет его сохранённые настройки.
+Для включения TCP ADB в Bugjaeger используйте встроенную команду
+**Commands → Connect through WiFi** —
+[по документации автора](https://sisik.eu/blog/android/bugjaeger/connect-wifi)
+она выполняет эквивалент `adb tcpip 5555`. Последующее подключение самого Omodash
+идёт к локальному адресу ГУ и не требует общей Wi-Fi-сети с телефоном.

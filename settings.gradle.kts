@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "OpenLauncher"
+rootProject.name = "Omodash"
 include(":app")

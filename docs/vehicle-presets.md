@@ -1,6 +1,6 @@
 # Vehicle presets
 
-`app/src/main/java/com/openlauncher/app/data/VehiclePreset.kt` is the catalog of vehicle bindings and launch protocols. The current selection is returned by `VehiclePresets.current()` and persisted as `vehicle_preset` by SettingsRepository. Startup restores that selection before constructing settings defaults. No selected preset means Default. Onboarding and Settings use the same selector.
+`app/src/main/java/win/solobot/omodash/data/VehiclePreset.kt` is the catalog of vehicle bindings and launch protocols. The current selection is returned by `VehiclePresets.current()` and persisted as `vehicle_preset` by SettingsRepository. Startup restores that selection before constructing settings defaults. No selected preset means Default. Onboarding and Settings use the same selector.
 
 OMODA 9 HW110:
 

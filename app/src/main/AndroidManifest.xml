@@ -92,7 +92,7 @@
         <service
             android:name=".service.MediaListenerService"
             android:exported="true"
-            android:label="Open Launcher Media"
+            android:label="Omodash Media"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />

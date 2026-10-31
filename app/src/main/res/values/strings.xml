@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Open Launcher</string>
-    <string name="update_helper_name">Open Launcher Update helper</string>
+    <string name="app_name">Omodash</string>
+    <string name="update_helper_name">Omodash Update helper</string>
     <string name="update_helper_description">Confirms installation only for a verified update requested by this launcher. Other apps, permission requests and uninstall dialogs are not confirmed.</string>
-    <string name="settings_label">Open Launcher Settings</string>
-    <string name="media_label">Open Launcher Media</string>
+    <string name="settings_label">Omodash Settings</string>
+    <string name="media_label">Omodash Media</string>
 </resources>

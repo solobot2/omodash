@@ -30,7 +30,7 @@ This release is a ground-up correctness pass over the entire launcher. Version 0
 - Now Playing prefers the **full-resolution artwork URI** when the media app provides one, picks the largest available bitmap otherwise, and renders with high filter quality — no more soft, stretched notification thumbnails.
 
 ### 🏠 Set as Default Launcher
-- New status row in Settings shows whether Open Launcher currently holds the home role, and requests it through the proper system dialog (Android 10+) with automatic fallbacks for vendor ROMs that hide the standard screens.
+- New status row in Settings shows whether Omodash currently holds the home role, and requests it through the proper system dialog (Android 10+) with automatic fallbacks for vendor ROMs that hide the standard screens.
 
 ### 🛰️ Calibration Honesty & GPS
 - A-GPS reset now sends the command Android's GPS driver actually recognizes and reports honestly when a device doesn't support it.

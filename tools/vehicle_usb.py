@@ -12,7 +12,7 @@ import sys
 import time
 import zipfile
 
-PACKAGE = "com.openlauncher.app"
+PACKAGE = "win.solobot.omodash"
 MEDIA = PACKAGE + "/" + PACKAGE + ".service.MediaListenerService"
 HELPER = PACKAGE + "/" + PACKAGE + ".update.UpdateAccessibilityService"
 ACTIVITY = PACKAGE + "/" + PACKAGE + ".MainActivity"
@@ -67,9 +67,9 @@ def select_device(listing, serial=None, allow_emulator=False, confirmed_usb=None
                          "При нескольких устройствах укажите --serial СЕРИЙНЫЙ_НОМЕР. Проверьте adb devices -l.")
     serial, state, usb = devices[0]
     if not usb and not (allow_emulator and serial.startswith("emulator-")):
-        raise SetupError("Разрешено только USB-подключение. Сетевой ADB этот скрипт не включает и не использует.")
+        raise SetupError("Скрипт выполняет команды только через USB, а не через сетевое ADB-подключение.")
     if state != "device":
-        raise SetupError(f"Устройство {state}. Подтвердите запрос отладки от ноутбука на магнитоле; проверьте флешку и кабель.")
+        raise SetupError(f"Устройство {state}. Подтвердите запрос отладки на магнитоле; проверьте флешку и кабель.")
     return serial
 
 
@@ -117,7 +117,9 @@ def listener_state(dump, component, user):
 def helper_bound(dump, user):
     for block in re.split(r"(?m)^  \* ServiceRecord", dump)[1:]:
         first = block.splitlines()[0]
-        if f" u{user} " in first and normalize_component(first.rstrip("}").split()[-1]) == HELPER:
+        # Newer Android appends a caller field (e.g. c:android) after the component.
+        record = re.search(r"\bu(\d+)\s+([^\s}]+/[^\s}]+)", first)
+        if record and int(record[1]) == user and normalize_component(record[2]) == HELPER:
             return "app=ProcessRecord{" in block and "received=true hasBound=true" in block
     return False
 
@@ -137,7 +139,7 @@ class Vehicle:
     def preflight(self, setup=False):
         dump = self.shell("dumpsys", "package", PACKAGE)
         if not re.search(r"Package \[" + re.escape(PACKAGE) + r"\]", dump) or "installed=true" not in user_block(dump, self.user):
-            raise SetupError("Релизный Open Launcher не установлен для активного пользователя. Установите omodash.apk без удаления данных.")
+            raise SetupError("Релизный Omodash не установлен для активного пользователя. Установите omodash.apk без удаления данных.")
         if setup and "android.permission.WRITE_SECURE_SETTINGS" not in dump:
             raise SetupError("Сначала обновите APK до Omodash 0.0.9 или новее (без удаления данных).")
         code = re.search(r"versionCode=(\d+)", dump)
@@ -186,7 +188,7 @@ class Vehicle:
         # On Android 11 shell cannot directly enable components of a non-debuggable APK.
         # Our DUMP-protected receiver restores only its own fixed component list as its own UID.
         restored = self.shell("am", "broadcast", "--user", self.user,
-                              "-a", "com.openlauncher.app.action.RESTORE_COMPONENTS",
+                              "-a", "win.solobot.omodash.action.RESTORE_COMPONENTS",
                               "-n", PACKAGE + "/" + PACKAGE + ".diagnostics.UsbControlReceiver")
         if "result=10729" not in restored:
             failures.append("Восстановление компонентов")
@@ -221,7 +223,7 @@ class Vehicle:
         result = self.status()
         # Check the real in-app Android APIs as well: AppOps alone can miss OEM/user restrictions.
         api = self.shell("am", "broadcast", "--user", self.user,
-                         "-a", "com.openlauncher.app.action.VERIFY_SETUP",
+                         "-a", "win.solobot.omodash.action.VERIFY_SETUP",
                          "-n", PACKAGE + "/" + PACKAGE + ".diagnostics.UsbControlReceiver")
         data = re.search(r'data="([^"]+)"', api)
         api_ok = "result=10728" in api and data is not None and set(data[1].split(";")) == {
@@ -235,9 +237,43 @@ class Vehicle:
         print("\nПрава настроены. Обычное обновление APK с той же подписью сохраняет их и настройки приложения.\n"
               "Проверьте Check updates в лаунчере. После перезагрузки можно повторно проверить режимом status.")
 
+    def enable_tcpip(self):
+        # Run last: tcpip restarts adbd and can briefly disconnect the USB transport.
+        print("\nTCP ADB: попытка включить порт 5555 через USB…", flush=True)
+        command_ok = False
+        try:
+            output = execute([self.adb, "-s", self.serial, "tcpip", "5555"])
+            print("  Ответ adb tcpip: " + (output or "(пустой)"))
+            command_ok = not re.search(r"(?i)(exception|error:|unknown command|not allowed|failed)", output)
+        except SetupError as error:
+            print("  ОШИБКА adb tcpip: " + str(error), file=sys.stderr)
+
+        print("  Ожидаю возврата USB ADB после перезапуска adbd (до 15 секунд)…", flush=True)
+        try:
+            execute([self.adb, "-s", self.serial, "wait-for-device"], timeout=15)
+            port = self.shell("getprop", "service.adb.tcp.port")
+            state = self.shell("getprop", "init.svc.adbd")
+            print("  service.adb.tcp.port=" + (port or "(пусто)"))
+            print("  init.svc.adbd=" + (state or "(пусто)"))
+        except SetupError as error:
+            print("  НЕТ подтверждения TCP ADB: " + str(error), file=sys.stderr)
+            print("  Проверьте USB-кабель, ADB-флешку и запрос отладки на ГУ; повторите enable-android-auto.", file=sys.stderr)
+            return False
+
+        if not command_ok or port != "5555" or state != "running":
+            print("  НЕТ подтверждения TCP ADB: команда или состояние adbd не прошли проверку. "
+                  "Права приложения проверяются отдельно; прошивка могла запретить TCP ADB.", file=sys.stderr)
+            return False
+        print("  OK  TCP ADB: команда выполнена, adbd запущен, порт 5555 настроен.\n"
+              "  Подключение Omodash к 127.0.0.1:5555 ещё не проверено: откройте Android Auto\n"
+              "  и подтвердите его запрос USB-отладки на ГУ, если он появится.\n"
+              "  Порт может быть доступен также по сети ГУ. После полной перезагрузки\n"
+              "  может потребоваться повторить команду через USB; постоянные свойства не меняются.")
+        return True
+
     def stop(self):
         prepared = self.shell("am", "broadcast", "--user", self.user,
-                              "-a", "com.openlauncher.app.action.PREPARE_STOP",
+                              "-a", "win.solobot.omodash.action.PREPARE_STOP",
                               "-n", PACKAGE + "/" + PACKAGE + ".diagnostics.UsbControlReceiver")
         if "result=10727" not in prepared:
             raise SetupError("Не удалось подготовить остановку. Нужен Omodash 0.0.9 или новее. "
@@ -304,11 +340,18 @@ def main():
         vehicle = Vehicle(adb, serial)
         vehicle.preflight(setup=args.action == "setup")
         if args.action == "enable-android-auto":
-            print(execute([adb, "-s", serial, "tcpip", "5555"]))
-            print("TCP ADB запрошен. Откройте Android Auto в Omodash и подтвердите запрос USB-отладки на экране ГУ, если он появится.")
-            print("После полной перезагрузки может потребоваться повторить эту команду через USB.")
+            if not vehicle.enable_tcpip():
+                return 1
         elif args.action == "setup":
-            vehicle.setup()
+            setup_error = None
+            try:
+                vehicle.setup()
+            except SetupError as error:
+                setup_error = error
+                print("\nОШИБКА настройки прав: " + str(error), file=sys.stderr)
+            tcpip_ok = vehicle.enable_tcpip()
+            if setup_error or not tcpip_ok:
+                return 1
         elif args.action == "status":
             if not all(vehicle.status().values()):
                 return 1

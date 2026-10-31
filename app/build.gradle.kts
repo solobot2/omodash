@@ -22,13 +22,13 @@ val updateFeedUrl = if (updateTestMode) {
 } else "https://api.github.com/repos/solobot2/omodash/releases/latest"
 
 android {
-    namespace  = "com.openlauncher.app"
+    namespace  = "win.solobot.omodash"
     compileSdk {
         version = release(36) { minorApiLevel = 1 }
     }
 
     defaultConfig {
-        applicationId  = "com.openlauncher.app"
+        applicationId  = "win.solobot.omodash"
         minSdk         = 21
         targetSdk      = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -41,7 +41,7 @@ android {
         buildConfigField("boolean", "INTERNAL_DOWNLOAD_TEST", (updateTestMode && providers.gradleProperty("internalDownloadTest").orNull == "true").toString())
         buildConfigField("String", "REPORT_EMAIL", "\"${diagnosticsConfig.getProperty("email", "").replace("\\", "\\\\").replace("\"", "\\\"")}\"")
         manifestPlaceholders["allowCleartextUpdates"] = updateTestMode.toString()
-        manifestPlaceholders["launcherLabel"] = if (updateTestMode) "Omodash Update Test" else "Open Launcher"
+        manifestPlaceholders["launcherLabel"] = if (updateTestMode) "Omodash Update Test" else "Omodash"
     }
 
     signingConfigs {
@@ -57,7 +57,7 @@ android {
         debug {
             applicationIdSuffix = if (updateTestMode) ".updatetest.debug" else ".debug"
             versionNameSuffix = "-debug"
-            manifestPlaceholders["launcherLabel"] = "Open Launcher Debug"
+            manifestPlaceholders["launcherLabel"] = "Omodash Debug"
         }
         release {
             if (updateTestMode) applicationIdSuffix = ".updatetest"

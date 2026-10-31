@@ -1,6 +1,6 @@
 <div align="center">
-  <img width="256" height="256" alt="logoo" src="https://github.com/user-attachments/assets/4c5c4ddb-836d-4c59-8325-76b8c8d78bb3" />
-  <h1>Open Launcher</h1>
+  <img width="256" height="256" alt="Omodash OD monogram" src="branding/omodash-icon.svg" />
+  <h1>Omodash</h1>
   <p><strong>An open-source, offline-first Android launcher built specifically for aftermarket car head units.</strong></p>
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -16,6 +16,8 @@ This fork publishes signed APK updates to `solobot2/omodash`. See [release and u
 For one-time USB permission setup, see [USB setup instructions](docs/usb-setup.md).
 For crash reports and ZIP diagnostics sent from the car, see [diagnostic instructions](docs/diagnostics.md).
 For CarPlay / Android Auto integration and factory radio, see [projection instructions](docs/projection.md).
+The application ID is `win.solobot.omodash`; see [branding and package identity](docs/branding.md)
+for the icon sources and installation after the package rename.
 
 ## 📖 Table of Contents
 - [Why Build Another Car Launcher?](#-why-build-another-car-launcher)
@@ -72,7 +74,7 @@ A growing library of purpose-built car widgets designed to look like they belong
 Lists every installed app, including system-level apps and CarPlay / Android Auto receivers without ordinary launcher entries. App icons fill each tile, with the name overlaid along the bottom edge.
 
 ### 📌 Sidebar Shortcuts
-The sidebar holds your most-used app shortcuts. Drag to reorder, long-press to remap, and position the entire bar on the Left, Right, or Bottom of the screen to suit your driving hand or interior layout.
+The sidebar holds your most-used app shortcuts. Drag to reorder, long-press to remap, and position the bar on the Left or Right of the screen. The bottom edge is reserved for the vehicle's system climate panel; an existing Bottom setting moves to the Left.
 
 ### 🌗 Smart Day/Night Theme Engine
 Four distinct modes for head units that can't always pass the car's headlight signal to Android:

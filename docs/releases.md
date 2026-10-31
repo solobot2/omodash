@@ -24,8 +24,8 @@
 ./gradlew :app:assembleRelease
 ```
 
-Debug имеет отдельный пакет `com.openlauncher.app.debug`; release сохраняет
-постоянный пакет `com.openlauncher.app`. Release подписывается постоянным ключом,
+Debug имеет отдельный пакет `win.solobot.omodash.debug`; release сохраняет
+постоянный пакет `win.solobot.omodash`. Release подписывается постоянным ключом,
 оптимизируется R8, содержит уменьшенные ресурсы и не является debuggable.
 Без настроенного ключа сборка release завершается ошибкой, а не создаёт
 незаметно неподписанный APK.
@@ -33,10 +33,12 @@ Debug имеет отдельный пакет `com.openlauncher.app.debug`; rel
 Готовый release: `app/build/outputs/apk/release/app-release.apk`.
 Файл расшифровки стеков R8: `app/build/outputs/mapping/release/mapping.txt`.
 
-Если раньше ставили debug со старым пакетом `com.openlauncher.app`, его подпись
-отличается от новой release-подписи. Для такой первой миграции понадобится удалить
-старый debug. Его настройки при удалении будут потеряны. Последующие обновления
-release сохраняют данные. Не удаляйте штатные приложения автомобиля.
+После переименования пакета Android считает `win.solobot.omodash` отдельным
+приложением. Удалите прежний Omodash, установите новый подписанный APK и повторите
+`python3 tools/vehicle_usb.py setup` из нового набора USB-tools. Настройки старого
+приложения при удалении будут потеряны; при необходимости снова назначьте Omodash
+домашним экраном. Постоянный сертификат Omodash сохраняется. Последующие обновления
+нового пакета сохраняют его данные и права.
 
 ## Публикация на GitHub
 
@@ -100,7 +102,7 @@ Deploy собирает подписанный APK, проверяет подп�
 На этой магнитоле флешка с ключом включает USB ADB; локальный TCP ADB при этом
 может оставаться закрытым. Для скрипта TCP не нужен.
 
-Скрипт настраивает только `com.openlauncher.app`: доступ к медиасессиям через
+Скрипт настраивает только `win.solobot.omodash`: доступ к медиасессиям через
 NotificationManager, установку APK, собственный Accessibility helper, чтение
 системных логов, WRITE_SECURE_SETTINGS и геолокацию для GPS/погоды. Другие
 включённые listeners и Accessibility services сохраняются. Штатные приложения,
@@ -143,7 +145,7 @@ ANDROID_SERIAL=emulator-5556 ./gradlew :app:connectedDebugAndroidTest
 
 Для испытания A → B без изменения основного установленного пакета предусмотрен
 явный тестовый режим. Он использует тот же release-ключ и оптимизацию, но отдельный
-пакет `com.openlauncher.app.updatetest` и локальный HTTP feed:
+пакет `win.solobot.omodash.updatetest` и локальный HTTP feed:
 
 ```sh
 ./gradlew :app:assembleRelease \

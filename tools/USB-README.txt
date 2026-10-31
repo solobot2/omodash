@@ -6,8 +6,8 @@ OMODASH: ОДНОКРАТНАЯ НАСТРОЙКА ПО USB
    Если появится запрос отладки от ноутбука — подтвердить на магнитоле.
 3. macOS: открыть tools/setup-usb.command.
    Windows: открыть tools/setup-usb.cmd.
-4. Дождаться OK у всех проверок и сообщения о завершении настройки.
-   НЕТ / ОШИБКА означает, что настройка не завершилась.
+4. Дождаться OK у всех проверок прав и результата попытки включить TCP ADB.
+   НЕТ / ОШИБКА означает, что соответствующий этап не подтверждён (код завершения 1).
 5. В лаунчере: Settings → Updates → Check updates.
 
 Нужны Python 3.9+ и Android SDK Platform-Tools.
@@ -18,13 +18,16 @@ OMODASH: ОДНОКРАТНАЯ НАСТРОЙКА ПО USB
 
 Команды из корня распакованного набора / проекта:
 
-python3 tools/vehicle_usb.py setup    — настройка только нашего пакета
+python3 tools/vehicle_usb.py setup    — права нашего пакета и попытка включить TCP ADB
 python3 tools/vehicle_usb.py status   — проверка без запуска приложения
 python3 tools/vehicle_usb.py collect  — диагностический ZIP на ноутбук
 python3 tools/vehicle_usb.py stop     — подготовка компонентов и проверенный force-stop
 
 Если устройств несколько: добавить --serial НОМЕР_ИЗ_ADB_DEVICES.
-Сетевой ADB не включается; IP-подключение не используется.
+Команды скрипта выполняются только через USB; IP-подключение не используется.
+В конце setup включается TCP ADB на ГУ (порт 5555), проверяется ответ команды
+и состояние adbd после его перезапуска. Порт может быть доступен также по сети ГУ.
+Подключение Omodash к 127.0.0.1:5555 проверяется при открытии Android Auto.
 Root и смена Device Owner не нужны. Штатные приложения и default Home не меняются.
 
 Подвисания / ALERT:
@@ -44,7 +47,15 @@ Settings → Diagnostics → Record logs for 2 minutes → Start recording.
 Проверено на отдельном AOSP Android 11. Проверка конкретной магнитолы ещё требуется.
 
 Android Auto в плитках Omodash 0.0.14+:
+Обычный setup уже пробует включить TCP ADB. Для повтора только этого шага:
   python3 tools/vehicle_usb.py enable-android-auto
 После команды откройте Android Auto в лаунчере и подтвердите USB debugging на ГУ.
 TCP ADB может отключаться после полного перезапуска ГУ; тогда повторите команду по USB.
 Подробности: docs/usb-setup.md
+
+С Android-телефона: Termux + Termux:API + Python + termux-adb (USB без root).
+Телефон должен поддерживать USB Host/OTG. После подключения и авторизации:
+  python3 tools/vehicle_usb.py setup --adb "$(command -v termux-adb)"
+Установка termux-adb: https://github.com/nohajc/termux-adb
+Пошаговые указания и вариант восстановления медиа через Bugjaeger: docs/usb-setup.md.
+Запуск с телефона на конкретном ГУ пока не проверен.
