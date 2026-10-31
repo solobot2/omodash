@@ -60,37 +60,33 @@ The home screen is a 6×2 grid with draggable widgets. Each widget defines its o
 ### 🎛️ Instrument Panel Widgets
 A growing library of purpose-built car widgets designed to look like they belong on a dash — not a phone:
 
-* **Smart Music Player** — pulls track metadata, album art, and playback controls from any local or streaming source. Detects when CarPlay or Android Auto is in use and switches into shortcut mode automatically.
+* **Smart Music Player** — uses the factory source ID and source-specific metadata on OMODA 9, including Android Auto sessions that Android marks inactive. Other head units use Android media sessions. Repeated artwork is retained without restarting image loading; seeking is enabled only for supported sources.
 * **AM/FM Radio** — instrument panel-style digital display that mirrors your head unit's **real tuner**. On szchoiceway-based units it talks to the MCU directly (seek, FM1/FM2/FM3/AM band switching, direct-tune frequency presets with memory). On every other unit it mirrors and controls your vendor radio app through its media session — assign the app once from the widget and get live frequency/station readout plus seek controls. No simulated stations or fake static.
 * **Speedometer** — standalone GPS-based digital speed readout. Independent from the trip tracker so it can live anywhere on the grid.
 * **Altimeter** — live elevation tracking pulled from the device GPS.
 * **Trip Meter** — taxi-style rolling odometer display with trip distance and elapsed time. Includes a hidden **0–100 km/h timer** (tap the meter label to reveal it) that auto-starts from standstill and locks in your time at 100.
 * **Head Unit Vitals** — real-time CPU load, memory pressure, and temperature readouts for monitoring your head unit's thermals on long drives.
 * **Soundboard** — 6 fully assignable sound pads. Each pad can be set to a built-in synth type (HORN, BEEP, ALERT, KICK, SNARE, BASS, FART) or loaded with any custom audio file from device storage. Assignments persist across restarts.
-* **Dynamic Weather** — auto-detects connectivity. Shows live weather when online, hides cleanly when offline. No broken blank widgets.
+* **Dynamic Weather** — shows live conditions, a loading/location status, or a clear unavailable message with Retry. The card remains visible without data, and failed requests retry automatically.
 * **GPS Compass** — live bearing with calibrated heading display.
 
 ### 🗂️ App Library
 Lists every installed app, including system-level apps and CarPlay / Android Auto receivers without ordinary launcher entries. App icons fill each tile, with the name overlaid along the bottom edge.
 
-### 📌 Sidebar Shortcuts
-The sidebar holds your most-used app shortcuts. Drag to reorder, long-press to remap, and position the bar on the Left or Right of the screen. The bottom edge is reserved for the vehicle's system climate panel; an existing Bottom setting moves to the Left.
+### 📌 Navigation and climate panels
+The sidebar can sit on the left or right. Its upper routes are Navigation, Car Settings, Local Settings and the currently selected audio source, all resolved through the vehicle preset. The bottom destinations are fixed: Home, launcher Settings and Applications, separated from vehicle routes by a divider. The full-width lower panel contains climate controls with persistent local on/off and temperature state. FAN remembers its last speed; SYNC links temperatures. Vehicle commands are not connected yet. Sidebar width equals climate height, and both panels share vector icon and button dimensions at every UI/text scale.
 
-### 🌗 Smart Day/Night Theme Engine
-Four distinct modes for head units that can't always pass the car's headlight signal to Android:
-* **Forced Dark / Forced Light** — static overrides.
-* **System Sync** — follows the head unit's native light/dark setting.
-* **Sunset Mode** — automatically switches at local sunrise/sunset using offline location calculations, no internet required.
+### 🌗 Day/night theme
+Fixed day and night palettes provide gradient surfaces, rounded widget shells, border highlights and separate navigation/climate selection styles. Morning / evening follows Android's `Configuration.uiMode`, exactly as the factory OMODA launcher does; Dark and Light are manual overrides. Theme colours are not editable. See [theme components and visual verification](docs/theme-foundation.md).
 
 ### 🛰️ GPS with Offline Calibration
 Speed and distance calculations use a rewritten GPS math layer with improved filtering. A calibration offset option is available for devices whose GPS chips report inaccurate baselines — accessible from the trip meter settings for reliable offline use.
 
 ### 🎨 Deep Personalization
-Accent color, background color, gradient, wallpaper with adjustable dim, font weight, text scale, UI scale, and app font — all tunable from the settings menu, which is organized into logical sections (Appearance, Layout, Widgets, System).
+Wallpaper dim, font weight, text scale, UI scale and font family remain configurable. Panel chrome uses the same selected density and typography as the rest of the launcher. At large combined scales, temperature controls remain at the edges and central HVAC controls scroll horizontally.
 
 ### Android Auto
-The factory receiver opens inside the home tile area through a local TCP ADB helper.
-See [setup and compatibility](docs/projection.md). CarPlay opens its factory app.
+Open CarPlay and Open Android Auto are in the Now Playing three-dot menu and launch their preset receiver apps. The sidebar’s Now Playing route opens the actual selected OEM audio source. See [setup and compatibility](docs/projection.md).
 
 ### 🔔 First-Run Onboarding
 A clean onboarding flow on first launch explains key permissions (location, notification listener, draw-over-apps) before requesting them, with direct links to the relevant system settings screens.
@@ -103,7 +99,6 @@ The current priority is **stability and universal compatibility** — ensuring t
 
 Remaining targets:
 
-- [ ] **Advanced Color Engine:** Per-element hex control for every surface in the UI — accent, text, borders, backgrounds — to precisely match a car's specific dashboard ambient lighting.
 - [ ] **Offline Weather via FM/RDS:** A highly experimental goal to pull local weather data directly from FM radio bands (RDS/TMC) using the car's physical antenna — bypassing Wi-Fi entirely.
 - [ ] **Universal Theming Engine:** A standardized platform for the community to build, share, and install full visual themes.
 

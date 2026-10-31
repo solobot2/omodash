@@ -249,9 +249,13 @@ def deploy(args):
                 (ROOT / "version.properties").write_text(desired)
                 run("git", "add", "version.properties")
                 run("git", "commit", "-m", f"Release v{version} ({code})")
-        run(sys.executable, "-m", "unittest", "discover", "-s", "tools/tests", "-v")
+        if not args.skip_tests:
+            run(sys.executable, "-m", "unittest", "discover", "-s", "tools/tests", "-v")
+        else:
+            print("Tests explicitly skipped; lint, release build and artifact verification remain enabled.", flush=True)
+        tasks = ([] if args.skip_tests else [":app:testDebugUnitTest"]) + [":app:lintRelease", ":app:assembleRelease"]
         run(str(ROOT / "gradlew"), "--project-cache-dir", str(ROOT / ".release-work/gradle-cache"),
-            ":app:testDebugUnitTest", ":app:lintRelease", ":app:assembleRelease", f"-PreleaseVersion={version}",
+            *tasks, f"-PreleaseVersion={version}",
             f"-PreleaseCode={code}", env=java_env())
         out = prepare_assets(version, code)
         if args.dry_run:
@@ -295,6 +299,7 @@ def main():
     parser.add_argument("--version", help="Human version MAJOR.MINOR.PATCH; omitted = next patch")
     parser.add_argument("--notes-file", help="UTF-8 release notes file")
     parser.add_argument("--dry-run", action="store_true", help="Build and validate locally without publishing")
+    parser.add_argument("--skip-tests", action="store_true", help="Explicitly skip tests; keep lint, build and artifact verification")
     args = parser.parse_args()
     try:
         deploy(args)

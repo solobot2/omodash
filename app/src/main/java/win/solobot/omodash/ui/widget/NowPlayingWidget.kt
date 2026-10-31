@@ -14,17 +14,17 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.Radio
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PowerSettingsNew
+import androidx.compose.material.icons.rounded.Radio
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,13 +55,9 @@ import androidx.lifecycle.repeatOnLifecycle
 fun NowPlayingWidget(
     state: NowPlayingState?,
     accent: Color,
-    carPlayPackage: String,
-    androidAutoPackage: String,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrev: () -> Unit,
-    onLaunchCarPlay: () -> Unit,
-    onLaunchAndroidAuto: () -> Unit,
     onTapToOpenApp: () -> Unit,
     onOpenContextMenu: () -> Unit,
     modifier: Modifier = Modifier,
@@ -79,17 +75,15 @@ fun NowPlayingWidget(
     onAssignRadio: () -> Unit = {},
     radioPackage: String = win.solobot.omodash.data.VehiclePresets.current().binding(win.solobot.omodash.data.VehicleApp.RADIO).packageName,
     allowRadioAssignment: Boolean = true,
-    radioSessionPackages: Set<String> = setOf(radioPackage)
+    radioSessionPackages: Set<String> = setOf(radioPackage),
+    onSeekTo: (Long) -> Unit = {},
+    selectedSource: String = "Automatic"
 ) {
-    val context     = LocalContext.current
-    val hasCarPlay  = carPlayPackage.isNotEmpty()
-    val hasAutoApp  = androidAutoPackage.isNotEmpty()
     val hasContent  = state != null && state.title.isNotEmpty()
 
-    var selectedSource by rememberSaveable { mutableStateOf("Automatic") }
     val showRadio = win.solobot.omodash.model.showRadioInNowPlaying(selectedSource,
-        state?.isPlaying == true, state?.controller?.packageName,
-        hardwareRadio != null, radioSessionPackages + radioPackage)
+        state?.isPlaying == true, state?.packageName,
+        hardwareRadio != null, radioSessionPackages + radioPackage, state?.oemSource)
 
     Box(
         modifier = modifier
@@ -102,7 +96,7 @@ fun NowPlayingWidget(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = 12.dp, end = 12.dp, top = 52.dp, bottom = 8.dp)
+                    .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 8.dp)
             ) {
                 RadioDeck(
                     accent = accent,
@@ -133,69 +127,18 @@ fun NowPlayingWidget(
                 onNext = onNext,
                 onPrev = onPrev,
                 onTapToOpenApp = onTapToOpenApp,
+                onSeekTo = onSeekTo,
                 onOpenContextMenu = onOpenContextMenu,
-                modifier = Modifier.fillMaxSize().padding(top = 48.dp)
+                modifier = Modifier.fillMaxSize()
             )
         }
 
-        // 2. FLOATING MULTI-SOURCE SELECTOR (Top-Right, always overlayed)
-        var menuExpanded by remember { mutableStateOf(false) }
-        val selectorIconColor = if (isDayMode) Color.Black.copy(alpha = 0.4f) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
-        
-        Row(
-            modifier = Modifier.align(Alignment.TopEnd).height(48.dp).padding(end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            if (hasCarPlay) FilledTonalButton(
-                onClick = onLaunchCarPlay, enabled = !isEditing,
-                colors = win.solobot.omodash.ui.theme.filledControlColors(),
-                contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.height(40.dp)
-            ) { Icon(Icons.Default.PhoneAndroid, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("CarPlay", fontSize = 11.sp) }
-            if (hasAutoApp) FilledTonalButton(
-                onClick = onLaunchAndroidAuto, enabled = !isEditing,
-                colors = win.solobot.omodash.ui.theme.filledControlColors(),
-                contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.height(40.dp)
-            ) { Icon(Icons.Default.DirectionsCar, null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("Android Auto", fontSize = 11.sp) }
-            Box {
-                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.MoreVert, "Source Selector", tint = selectorIconColor, modifier = Modifier.size(24.dp))
-                }
-                val dropdownBg   = if (isDayMode) Color(0xFFF0F0F0) else MaterialTheme.colorScheme.background
-                val dropdownText = if (isDayMode) Color(0xFF111111) else MaterialTheme.colorScheme.onBackground
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
-                    modifier = Modifier.background(dropdownBg)
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Automatic", color = dropdownText, fontSize = 11.sp) },
-                        onClick = { selectedSource = "Automatic"; menuExpanded = false }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Any Player", color = dropdownText, fontSize = 11.sp) },
-                        onClick = {
-                            selectedSource = "Any Player"
-                            menuExpanded = false
-                        },
-                        leadingIcon = { Icon(Icons.Default.MusicNote, null, tint = accent, modifier = Modifier.size(14.dp)) }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("FM/AM Radio", color = dropdownText, fontSize = 11.sp) },
-                        onClick = {
-                            selectedSource = "FM/AM Radio"
-                            menuExpanded = false
-                        },
-                        leadingIcon = { Icon(Icons.Default.Radio, null, tint = accent, modifier = Modifier.size(14.dp)) }
-                    )
-                    if (allowRadioAssignment) DropdownMenuItem(
-                        text = { Text("Change radio app", color = dropdownText, fontSize = 11.sp) },
-                        onClick = { menuExpanded = false; onAssignRadio() },
-                        enabled = !isEditing,
-                        leadingIcon = { Icon(Icons.Default.Radio, null, tint = accent, modifier = Modifier.size(14.dp)) }
-                    )
-                }
-            }
+        // Overlay only: opening the menu never reserves a header row in the player.
+        IconButton(onClick = onOpenContextMenu,
+            modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(40.dp)) {
+            win.solobot.omodash.ui.components.RoundedSymbol(win.solobot.omodash.R.drawable.symbol_more_vert,
+                Modifier.size(24.dp), "Now Playing menu",
+                tint = win.solobot.omodash.ui.theme.LocalDashboardPalette.current.muted)
         }
     }
 }
@@ -236,10 +179,10 @@ private fun RadioDeck(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(Icons.Default.Radio, null, tint = dimColor, modifier = Modifier.size(22.dp))
+            Icon(Icons.Rounded.Radio, null, tint = dimColor, modifier = Modifier.size(22.dp))
             Spacer(Modifier.height(6.dp))
             Text(
-                if (radioAssigned) "RADIO IS NOT PLAYING" else "NO RADIO SOURCE",
+                if (radioAssigned) "RADIO INFORMATION UNAVAILABLE" else "NO RADIO SOURCE",
                 color = contentColor.copy(alpha = 0.85f),
                 fontSize = 9.sp, fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp
@@ -342,7 +285,7 @@ private fun RadioDeck(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.Default.PowerSettingsNew, "PWR",
+                    Icons.Rounded.PowerSettingsNew, "PWR",
                     tint = if (!hardwareRadio.canStop && powerOn) dimColor.copy(alpha = 0.3f) else if (powerOn) chipActiveText else dimColor,
                     modifier = Modifier.size(16.dp)
                 )
@@ -531,6 +474,7 @@ private fun StandardMinimalPlayer(
     onPrev: () -> Unit,
     onTapToOpenApp: () -> Unit,
     onOpenContextMenu: () -> Unit,
+    onSeekTo: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -552,7 +496,7 @@ private fun StandardMinimalPlayer(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Default.MusicNote, null, tint = idleIconColor, modifier = Modifier.size(28.dp))
+                    Icon(Icons.Rounded.MusicNote, null, tint = idleIconColor, modifier = Modifier.size(28.dp))
                     Text("OPEN MUSIC", color = idleTextColor, fontSize = 10.sp, letterSpacing = 1.sp)
                 }
             }
@@ -561,23 +505,35 @@ private fun StandardMinimalPlayer(
             val nonNullState = state!!
             val canPrevious = (nonNullState.actions and PlaybackState.ACTION_SKIP_TO_PREVIOUS) != 0L
             val canNext = (nonNullState.actions and PlaybackState.ACTION_SKIP_TO_NEXT) != 0L
-            val durationMs = nonNullState.controller?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
-            var positionMs by remember(nonNullState.controller?.sessionToken, nonNullState.title) {
-                mutableLongStateOf(if (durationMs > 0) nonNullState.controller?.playbackState?.position ?: 0L else 0L)
+            val durationMs = nonNullState.durationMs.takeIf { it > 0 }
+                ?: nonNullState.controller?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+            val canSeek = nonNullState.actions and PlaybackState.ACTION_SEEK_TO != 0L
+            var positionMs by remember(nonNullState.oemSource, nonNullState.mediaId, nonNullState.controller?.sessionToken, nonNullState.title) {
+                mutableLongStateOf(nonNullState.positionMs.coerceAtLeast(0L))
             }
+            var draggedFraction by remember(nonNullState.mediaId, nonNullState.title) { mutableStateOf<Float?>(null) }
             val lifecycleOwner = LocalLifecycleOwner.current
-            LaunchedEffect(nonNullState.controller?.sessionToken, nonNullState.isPlaying, nonNullState.title, durationMs, lifecycleOwner) {
+            LaunchedEffect(nonNullState.controller?.sessionToken, nonNullState.isPlaying, nonNullState.title,
+                nonNullState.positionMs, nonNullState.positionUpdatedAtMs, durationMs, lifecycleOwner) {
+                fun currentPosition(): Long {
+                    val playback = if (nonNullState.oemSource == null) nonNullState.controller?.playbackState else null
+                    return win.solobot.omodash.model.playbackPosition(playback?.position ?: nonNullState.positionMs,
+                        durationMs, playback?.lastPositionUpdateTime ?: nonNullState.positionUpdatedAtMs,
+                        android.os.SystemClock.elapsedRealtime(), nonNullState.isPlaying,
+                        playback?.playbackSpeed ?: nonNullState.playbackSpeed)
+                }
+                positionMs = currentPosition()
                 // Live radio has no progress bar. Never poll it, or a background Activity.
                 if (durationMs > 0 && nonNullState.isPlaying) lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                     while (true) {
-                        positionMs = nonNullState.controller?.playbackState?.position ?: positionMs
+                        positionMs = currentPosition()
                         delay(500)
                     }
                 }
             }
 
             // Draw Album Art as background with smooth blur overlay if present
-            val hasAlbumArt = nonNullState.albumArt != null
+            val hasAlbumArt = nonNullState.albumArt != null || !nonNullState.artUri.isNullOrBlank()
             val useDarkTheme = hasAlbumArt || !isDayMode
 
             val currentTextColor = if (hasAlbumArt) Color.White else if (isDayMode) Color(0xFF111111) else MaterialTheme.colorScheme.onBackground
@@ -589,21 +545,19 @@ private fun StandardMinimalPlayer(
             val currentPlayIconColor = if (useDarkTheme) Color.Black else Color.White
 
             if (hasAlbumArt) {
-                // Prefer the full-resolution art URI when the source app provides
-                // one — the metadata bitmap is often a downscaled notification
-                // thumbnail that looks soft stretched across the widget. Falls back
-                // to the bitmap if the URI fails to load, and renders with high
-                // filter quality so upscaling stays smooth either way.
-                coil.compose.AsyncImage(
-                    model = nonNullState.artUri ?: nonNullState.albumArt,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    filterQuality = androidx.compose.ui.graphics.FilterQuality.High,
-                    error = nonNullState.albumArt?.let {
-                        androidx.compose.ui.graphics.painter.BitmapPainter(it.asImageBitmap())
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
+                Box(Modifier.fillMaxSize().background(Color.Black))
+                val bitmap = nonNullState.albumArt
+                if (bitmap != null) {
+                    val image = remember(bitmap) { bitmap.asImageBitmap() }
+                    Image(bitmap = image, contentDescription = null, contentScale = ContentScale.Crop,
+                        filterQuality = androidx.compose.ui.graphics.FilterQuality.High, modifier = Modifier.fillMaxSize())
+                } else {
+                    val request = remember(context, nonNullState.artUri) {
+                        coil.request.ImageRequest.Builder(context).data(nonNullState.artUri).crossfade(false).build()
+                    }
+                    coil.compose.AsyncImage(model = request, contentDescription = null,
+                        contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                }
                 // 25% dimming layer overlay
                 Box(
                     modifier = Modifier
@@ -649,11 +603,25 @@ private fun StandardMinimalPlayer(
                         "No playback controls available in the current state", color = currentSubTextColor, fontSize = 9.sp
                     )
                     if (durationMs > 0) {
-                        LinearProgressIndicator(
+                        if (canSeek) Slider(
+                            value = draggedFraction ?: (positionMs.toFloat() / durationMs).coerceIn(0f, 1f),
+                            onValueChange = { draggedFraction = it },
+                            onValueChangeFinished = {
+                                draggedFraction?.let { fraction ->
+                                    val target = (fraction * durationMs).toLong()
+                                    positionMs = target
+                                    onSeekTo(target)
+                                }
+                                draggedFraction = null
+                            },
+                            enabled = !isEditing,
+                            modifier = Modifier.fillMaxWidth().height(24.dp),
+                            colors = SliderDefaults.colors(thumbColor = currentProgressColor,
+                                activeTrackColor = currentProgressColor, inactiveTrackColor = currentProgressTrack)
+                        ) else LinearProgressIndicator(
                             progress = { (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) },
                             modifier = Modifier.fillMaxWidth().height(2.dp),
-                            color = currentProgressColor,
-                            trackColor = currentProgressTrack
+                            color = currentProgressColor, trackColor = currentProgressTrack
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -670,7 +638,7 @@ private fun StandardMinimalPlayer(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         IconButton(onClick = onPrev, enabled = !isEditing && canPrevious, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.SkipPrevious, "Prev", tint = if (canPrevious) currentIconColor else currentIconColor.copy(alpha = 0.25f), modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.SkipPrevious, "Prev", tint = if (canPrevious) currentIconColor else currentIconColor.copy(alpha = 0.25f), modifier = Modifier.size(20.dp))
                         }
                         Box(
                             contentAlignment = Alignment.Center,
@@ -686,9 +654,9 @@ private fun StandardMinimalPlayer(
                             ) {
                                 Icon(
                                     imageVector = when (nonNullState.playbackAction) {
-                                        PlaybackAction.PAUSE -> Icons.Default.Pause
-                                        PlaybackAction.STOP -> Icons.Default.Stop
-                                        else -> Icons.Default.PlayArrow
+                                        PlaybackAction.PAUSE -> Icons.Rounded.Pause
+                                        PlaybackAction.STOP -> Icons.Rounded.Stop
+                                        else -> Icons.Rounded.PlayArrow
                                     },
                                     contentDescription = when (nonNullState.playbackAction) {
                                         PlaybackAction.PAUSE -> "Pause"
@@ -701,7 +669,7 @@ private fun StandardMinimalPlayer(
                             }
                         }
                         IconButton(onClick = onNext, enabled = !isEditing && canNext, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.SkipNext, "Next", tint = if (canNext) currentIconColor else currentIconColor.copy(alpha = 0.25f), modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.SkipNext, "Next", tint = if (canNext) currentIconColor else currentIconColor.copy(alpha = 0.25f), modifier = Modifier.size(20.dp))
                         }
                     }
                 }

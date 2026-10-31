@@ -13,7 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -134,7 +134,7 @@ fun OnboardingScreen(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(
-                        imageVector = Icons.Default.DirectionsCar,
+                        imageVector = Icons.Rounded.DirectionsCar,
                         contentDescription = null,
                         tint = accent,
                         modifier = Modifier.size(44.dp)
@@ -244,7 +244,7 @@ fun OnboardingScreen(
                             shape = RoundedCornerShape(4.dp),
                             modifier = Modifier.height(44.dp)
                         ) {
-                            Icon(Icons.Default.ArrowBack, null, tint = Color(0xFF888888), modifier = Modifier.size(16.dp))
+                            Icon(Icons.Rounded.ArrowBack, null, tint = Color(0xFF888888), modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
                             Text("BACK", color = Color(0xFF888888), fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                         }
@@ -270,7 +270,7 @@ fun OnboardingScreen(
                         else -> "CONTINUE"
                     }
 
-                    val nextButtonIcon = if (currentStep == 4) Icons.Default.Check else Icons.Default.ArrowForward
+                    val nextButtonIcon = if (currentStep == 4) Icons.Rounded.Check else Icons.Rounded.ArrowForward
 
                     if (isPrimary) {
                         Button(
@@ -369,9 +369,9 @@ private fun IntroStep(accent: Color) {
         Spacer(Modifier.height(8.dp))
 
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            BulletItem(Icons.Default.CloudOff, "100% Offline-Based", "No reliance on a mobile signal or network connection to function. Speedometer, compass telemetry, and altimeter operate entirely offline.")
-            BulletItem(Icons.Default.Palette, "Highly Customizable Dashboard", "Tailor color accents, background gradients, typography fonts, system units, and drag-and-drop to rearrange your tiles.")
-            BulletItem(Icons.Default.VolumeUp, "Soundboard & Media Shortcuts", "Trigger custom soundboard sound effects, manage CarPlay & Android Auto shortcuts, and control active media players.")
+            BulletItem(Icons.Rounded.CloudOff, "100% Offline-Based", "No reliance on a mobile signal or network connection to function. Speedometer, compass telemetry, and altimeter operate entirely offline.")
+            BulletItem(Icons.Rounded.Palette, "Highly Customizable Dashboard", "Tailor color accents, background gradients, typography fonts, system units, and drag-and-drop to rearrange your tiles.")
+            BulletItem(Icons.Rounded.VolumeUp, "Soundboard & Media Shortcuts", "Trigger custom soundboard sound effects, manage CarPlay & Android Auto shortcuts, and control active media players.")
         }
     }
 }
@@ -408,7 +408,7 @@ private fun LocationStep(accent: Color, isGranted: Boolean, onGrant: () -> Unit)
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Icon(
-                    imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                    imageVector = if (isGranted) Icons.Rounded.CheckCircle else Icons.Rounded.Cancel,
                     contentDescription = null,
                     tint = if (isGranted) Color(0xFF44AA44) else Color(0xFFDD5555),
                     modifier = Modifier.size(24.dp)
@@ -437,7 +437,7 @@ private fun LocationStep(accent: Color, isGranted: Boolean, onGrant: () -> Unit)
                 colors = ButtonDefaults.buttonColors(containerColor = accent),
                 modifier = Modifier.height(44.dp)
             ) {
-                Icon(Icons.Default.LocationOn, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.LocationOn, null, tint = Color.Black, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("GRANT ACCESS", color = Color.Black, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, fontSize = 12.sp)
             }
@@ -477,7 +477,7 @@ private fun MediaStep(accent: Color, isGranted: Boolean, onGrant: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Icon(
-                    imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                    imageVector = if (isGranted) Icons.Rounded.CheckCircle else Icons.Rounded.Cancel,
                     contentDescription = null,
                     tint = if (isGranted) Color(0xFF44AA44) else Color(0xFFDD5555),
                     modifier = Modifier.size(24.dp)
@@ -506,7 +506,7 @@ private fun MediaStep(accent: Color, isGranted: Boolean, onGrant: () -> Unit) {
                 colors = ButtonDefaults.buttonColors(containerColor = accent),
                 modifier = Modifier.height(44.dp)
             ) {
-                Icon(Icons.Default.VolumeUp, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.VolumeUp, null, tint = Color.Black, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("ENABLE MEDIA LISTENER", color = Color.Black, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, fontSize = 12.sp)
             }
@@ -540,7 +540,7 @@ private fun FinalStep(accent: Color, onSetDefault: () -> Unit) {
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E1E1E)),
             modifier = Modifier.height(44.dp)
         ) {
-            Icon(Icons.Default.Home, null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Icon(Icons.Rounded.Home, null, tint = Color.White, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
             Text("SET AS DEFAULT", color = Color.White, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, fontSize = 12.sp)
         }

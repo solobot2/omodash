@@ -10,7 +10,7 @@ import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -137,7 +137,7 @@ fun AppLibraryScreen(
                     .padding(horizontal = 10.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(Icons.Default.Search, null, tint = placeholderC, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Rounded.Search, null, tint = placeholderC, modifier = Modifier.size(14.dp))
                     BasicTextField(
                         value         = query,
                         onValueChange = { query = it },

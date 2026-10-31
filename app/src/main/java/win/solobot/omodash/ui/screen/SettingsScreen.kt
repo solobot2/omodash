@@ -12,8 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,18 +30,16 @@ import win.solobot.omodash.data.AppSettings
 import win.solobot.omodash.data.DayNightMode
 import win.solobot.omodash.data.VehiclePresets
 import win.solobot.omodash.data.withVehiclePreset
+import win.solobot.omodash.data.vehicleBinding
 import win.solobot.omodash.data.SidebarPosition
 import win.solobot.omodash.data.ShortcutConfig
-import win.solobot.omodash.data.GradientDirection
 import win.solobot.omodash.data.UnitSystem
 import win.solobot.omodash.ui.theme.LocalDayMode
-import win.solobot.omodash.util.SunriseSunset
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import kotlinx.coroutines.delay
-import win.solobot.omodash.ui.components.ColorPickerDialog
 import win.solobot.omodash.ui.components.ConfirmDialog
 
 // Resolved at call site via LocalDayMode — see SettingsDivider / SettingsSection
@@ -55,16 +53,13 @@ fun SettingsScreen(
     onReset: () -> Unit,
     onAssignCarPlay: () -> Unit,
     onAssignAndroidAuto: () -> Unit,
+    onAssignVehicleApp: (win.solobot.omodash.data.VehicleApp) -> Unit = {},
     focusUpdates: Boolean = false,
     onUpdatesFocused: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var showResetDialog       by remember { mutableStateOf(false) }
-    var showAccentPicker      by remember { mutableStateOf(false) }
-    var showBgPicker          by remember { mutableStateOf(false) }
-    var showGradientEndPicker by remember { mutableStateOf(false) }
-    var showFontColorPicker   by remember { mutableStateOf(false) }
     var showDiagnosticReport by remember { mutableStateOf(false) }
 
     // OpenDocument (not GetContent): only SAF document URIs carry a persistable
@@ -123,7 +118,7 @@ fun SettingsScreen(
             SettingsButton(
                 label = "Send / save diagnostic ZIP",
                 sublabel = "Include recorded logs, crashes and device information",
-                icon = Icons.Default.BugReport,
+                icon = Icons.Rounded.BugReport,
                 accent = accent,
                 onClick = { showDiagnosticReport = true }
             )
@@ -169,7 +164,7 @@ fun SettingsScreen(
                 label    = "Set as Default Launcher",
                 sublabel = if (isDefaultLauncher) "Active — Omodash is the home app"
                            else "Required so the head unit boots into Omodash",
-                icon     = Icons.Default.Home,
+                icon     = Icons.Rounded.Home,
                 accent   = if (isDefaultLauncher) accent else Color(0xFF993333),
                 onClick  = {
                     // Preferred: the system home-role dialog (API 29+). Vendor ROMs
@@ -217,7 +212,7 @@ fun SettingsScreen(
             SettingsButton(
                 label = if (mediaAllowed) "Reconnect media" else "Enable media access",
                 sublabel = "Restore Now Playing, station information and album art",
-                icon = Icons.Default.MusicNote, accent = accent,
+                icon = Icons.Rounded.MusicNote, accent = accent,
                 onClick = {
                     if (mediaAllowed) {
                         win.solobot.omodash.util.MediaAccess.ensureConnected(context)
@@ -230,7 +225,7 @@ fun SettingsScreen(
             SettingsButton(
                 label    = "Location Access",
                 sublabel = if (hasLocation) "Granted — GPS, compass & weather active" else "Required for compass, speed & weather",
-                icon     = if (hasLocation) Icons.Default.LocationOn else Icons.Default.LocationOff,
+                icon     = if (hasLocation) Icons.Rounded.LocationOn else Icons.Rounded.LocationOff,
                 accent   = if (hasLocation) accent else Color(0xFF993333),
                 onClick  = {
                     if (!hasLocation) {
@@ -271,7 +266,7 @@ fun SettingsScreen(
             SettingsButton(
                 label = "CarPlay app",
                 sublabel = "$carPlayLabel · Tap to choose or change",
-                icon = Icons.Default.PhoneAndroid,
+                icon = Icons.Rounded.PhoneAndroid,
                 accent = accent,
                 onClick = onAssignCarPlay
             )
@@ -280,7 +275,7 @@ fun SettingsScreen(
             SettingsButton(
                 label = "Android Auto app",
                 sublabel = "$androidAutoLabel · Tap to choose or change",
-                icon = Icons.Default.DirectionsCar,
+                icon = Icons.Rounded.DirectionsCar,
                 accent = accent,
                 onClick = onAssignAndroidAuto
             )
@@ -295,7 +290,7 @@ fun SettingsScreen(
             SettingsRow(
                 label    = "Vehicle Name",
                 sublabel = "",
-                icon     = Icons.Default.DirectionsCar
+                icon     = Icons.Rounded.DirectionsCar
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     OutlinedTextField(
@@ -309,7 +304,7 @@ fun SettingsScreen(
                     )
                     if (nameInput != settings.vehicleName) {
                         IconButton(onClick = { onUpdate { copy(vehicleName = nameInput) } }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Default.Check, "Save", tint = accent, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Rounded.Check, "Save", tint = accent, modifier = Modifier.size(16.dp))
                         }
                     }
                 }
@@ -323,7 +318,7 @@ fun SettingsScreen(
                     SidebarPosition.LEFT   -> "Left side"
                     SidebarPosition.RIGHT  -> "Right side"
                 },
-                icon     = Icons.Default.SwapHoriz
+                icon     = Icons.Rounded.SwapHoriz
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     SidebarPosition.entries.forEach { pos ->
@@ -342,7 +337,7 @@ fun SettingsScreen(
                             },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = accent,
-                                selectedLabelColor     = Color.Black
+                                selectedLabelColor     = MaterialTheme.colorScheme.onPrimary
                             )
                         )
                     }
@@ -351,7 +346,7 @@ fun SettingsScreen(
 
             SettingsDivider()
 
-            SettingsRow(label = "Unit System", sublabel = if (settings.unitSystem == UnitSystem.METRIC) "Metric (°C, km)" else "Imperial (°F, mi)", icon = Icons.Default.Straighten) {
+            SettingsRow(label = "Unit System", sublabel = if (settings.unitSystem == UnitSystem.METRIC) "Metric (°C, km)" else "Imperial (°F, mi)", icon = Icons.Rounded.Straighten) {
                 Row {
                     FilterChip(
                         selected = settings.unitSystem == UnitSystem.METRIC,
@@ -359,7 +354,7 @@ fun SettingsScreen(
                         label    = { Text("Metric", fontSize = 11.sp) },
                         colors   = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = accent,
-                            selectedLabelColor     = Color.Black
+                            selectedLabelColor     = MaterialTheme.colorScheme.onPrimary
                         )
                     )
                     Spacer(Modifier.width(6.dp))
@@ -369,50 +364,34 @@ fun SettingsScreen(
                         label    = { Text("Imperial", fontSize = 11.sp) },
                         colors   = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = accent,
-                            selectedLabelColor     = Color.Black
+                            selectedLabelColor     = MaterialTheme.colorScheme.onPrimary
                         )
                     )
                 }
             }
         }
 
-        // ── Sidebar Shortcuts ─────────────────────────────────────────────────
-        SettingsSection("Sidebar") {
-            settings.shortcuts.forEachIndexed { index, shortcut ->
-                if (index > 0) SettingsDivider()
-                SettingsRow(
-                    label    = "Slot ${index + 1}",
-                    sublabel = when {
-                        shortcut.label.isNotEmpty()       -> shortcut.label
-                        shortcut.packageName.isNotEmpty() -> shortcut.packageName
-                        else                              -> "Empty"
-                    },
-                    icon     = Icons.Default.Apps
-                ) {
-                    if (settings.shortcuts.size > 1) {
-                        IconButton(
-                            onClick  = {
-                                onUpdate {
-                                    copy(shortcuts = shortcuts.toMutableList().also { it.removeAt(index) })
-                                }
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(Icons.Default.Close, null, tint = Color(0xFF993333), modifier = Modifier.size(14.dp))
-                        }
+        SettingsSection("Sidebar routes") {
+            listOf(
+                win.solobot.omodash.data.VehicleApp.NAVIGATION to "Navigation",
+                win.solobot.omodash.data.VehicleApp.CAR_SETTINGS to "Car Settings",
+                win.solobot.omodash.data.VehicleApp.LOCAL_SETTINGS to "Local Settings"
+            ).forEach { (app, label) ->
+                val binding = settings.vehicleBinding(app)
+                if (VehiclePresets.find(settings.vehiclePresetId).allowsAppAssignment) {
+                    val assignment = remember(context, binding.packageName, binding.intentAction) {
+                        if (binding.packageName.isBlank() && binding.intentAction != null) "System default"
+                        else selectedAppLabel(context, binding.packageName)
                     }
-                }
+                    SettingsButton(label = label, sublabel = assignment,
+                        icon = Icons.Rounded.OpenInNew, accent = accent,
+                        onClick = { onAssignVehicleApp(app) })
+                } else SettingsRow(label = label, sublabel = "Factory preset", icon = Icons.Rounded.OpenInNew) {}
+                SettingsDivider()
             }
-
-            SettingsDivider()
-
-            SettingsButton(
-                label    = "Add Slot",
-                sublabel = "Append an empty shortcut to the sidebar",
-                icon     = Icons.Default.Add,
-                accent   = accent,
-                onClick  = { onUpdate { copy(shortcuts = shortcuts + ShortcutConfig()) } }
-            )
+            Text("Now Playing opens the currently selected audio source.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 12.dp))
         }
 
         // ── Appearance ───────────────────────────────────────────────────────
@@ -423,14 +402,12 @@ fun SettingsScreen(
                 sublabel = when (settings.dayNightMode) {
                     DayNightMode.DARK   -> "Always dark"
                     DayNightMode.LIGHT  -> "Always light"
-                    DayNightMode.AUTO   -> "Sunrise / sunset"
-                    DayNightMode.SYSTEM -> "Follows system theme"
+                    DayNightMode.AUTO   -> "Follows the factory day/night mode"
                 },
                 icon = when (settings.dayNightMode) {
-                    DayNightMode.DARK   -> Icons.Default.NightlightRound
-                    DayNightMode.LIGHT  -> Icons.Default.LightMode
-                    DayNightMode.AUTO   -> Icons.Default.Brightness4
-                    DayNightMode.SYSTEM -> Icons.Default.PhoneAndroid
+                    DayNightMode.DARK   -> Icons.Rounded.NightlightRound
+                    DayNightMode.LIGHT  -> Icons.Rounded.LightMode
+                    DayNightMode.AUTO   -> Icons.Rounded.Brightness4
                 }
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -443,8 +420,7 @@ fun SettingsScreen(
                                     text      = when (mode) {
                                         DayNightMode.DARK   -> "Dark"
                                         DayNightMode.LIGHT  -> "Light"
-                                        DayNightMode.AUTO   -> "Sunset"
-                                        DayNightMode.SYSTEM -> "System"
+                                        DayNightMode.AUTO   -> "Morning / evening"
                                     },
                                     fontSize  = 9.sp,
                                     letterSpacing = 0.5.sp
@@ -452,144 +428,9 @@ fun SettingsScreen(
                             },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = accent,
-                                selectedLabelColor     = Color.Black
+                                selectedLabelColor     = MaterialTheme.colorScheme.onPrimary
                             )
                         )
-                    }
-                }
-            }
-
-            SettingsDivider()
-
-            // Accent color
-            SettingsRow(
-                label    = "Accent Color",
-                sublabel = "UI highlight color",
-                icon     = Icons.Default.Palette
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(settings.accentColor))
-                        .clickable { showAccentPicker = true }
-                )
-            }
-
-            SettingsDivider()
-
-            // Background color + gradient
-            SettingsRow(
-                label    = "Background",
-                sublabel = if (settings.useGradient) "Gradient" else "Solid color",
-                icon     = Icons.Default.FormatColorFill
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment     = Alignment.CenterVertically
-                ) {
-                    // Start color swatch
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(settings.backgroundColor))
-                            .clickable { showBgPicker = true }
-                    )
-                    if (settings.useGradient) {
-                        androidx.compose.material3.Icon(
-                            Icons.Default.ArrowForward, null,
-                            tint = if (isDayMode) Color(0xFF999999) else Color(0xFF555555), modifier = Modifier.size(14.dp)
-                        )
-                        // End color swatch
-                        Box(
-                            modifier = Modifier
-                                .size(28.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(settings.gradientEndColor))
-                                .clickable { showGradientEndPicker = true }
-                        )
-                    }
-                    if (settings.useCustomBackgroundColor) {
-                        TextButton(
-                            onClick = {
-                                onUpdate {
-                                    copy(
-                                        useCustomBackgroundColor = false,
-                                        backgroundColor = Color.Black.toArgb(),
-                                        useGradient = false
-                                    )
-                                }
-                            },
-                            contentPadding = PaddingValues(horizontal = 6.dp),
-                            modifier = Modifier.height(28.dp)
-                        ) {
-                            Text("DEFAULT", color = accent, fontSize = 9.sp, letterSpacing = 1.sp)
-                        }
-                    }
-                }
-            }
-
-            SettingsDivider()
-
-            // Font Color row
-            SettingsRow(
-                label    = "Font Color",
-                sublabel = "Custom text color in dark mode",
-                icon     = Icons.Default.FormatSize
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(settings.fontColor))
-                        .clickable { showFontColorPicker = true }
-                )
-            }
-
-            SettingsDivider()
-
-            SettingsRow(label = "Use Gradient", sublabel = "Blend two colors as background", icon = Icons.Default.Gradient) {
-                Switch(checked = settings.useGradient,
-                    onCheckedChange = { onUpdate { copy(useGradient = it) } },
-                    colors = switchColors(accent))
-            }
-
-            if (settings.useGradient) {
-                SettingsDivider()
-                SettingsRow(
-                    label    = "Gradient Direction",
-                    sublabel = when (settings.gradientDirection) {
-                        GradientDirection.TOP_TO_BOTTOM -> "Top to Bottom"
-                        GradientDirection.LEFT_TO_RIGHT -> "Left to Right"
-                        GradientDirection.DIAGONAL      -> "Diagonal (Linear)"
-                        GradientDirection.RADIAL        -> "Radial (Circular)"
-                    },
-                    icon     = Icons.Default.TrendingFlat
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        GradientDirection.entries.forEach { dir ->
-                            FilterChip(
-                                selected = settings.gradientDirection == dir,
-                                onClick  = { onUpdate { copy(gradientDirection = dir) } },
-                                label    = {
-                                    Text(
-                                        text      = when (dir) {
-                                            GradientDirection.TOP_TO_BOTTOM -> "Vertical"
-                                            GradientDirection.LEFT_TO_RIGHT -> "Horizontal"
-                                            GradientDirection.DIAGONAL      -> "Diagonal"
-                                            GradientDirection.RADIAL        -> "Radial"
-                                        },
-                                        fontSize  = 9.sp,
-                                        letterSpacing = 0.5.sp
-                                    )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = accent,
-                                    selectedLabelColor     = Color.Black
-                                )
-                            )
-                        }
                     }
                 }
             }
@@ -600,7 +441,7 @@ fun SettingsScreen(
             SettingsButton(
                 label    = "Set Wallpaper",
                 sublabel = if (settings.wallpaperUri.isNotEmpty()) "Custom wallpaper active" else "Choose image from gallery",
-                icon     = Icons.Default.Wallpaper,
+                icon     = Icons.Rounded.Wallpaper,
                 accent   = accent,
                 onClick  = { wallpaperPicker.launch(arrayOf("image/*")) }
             )
@@ -609,7 +450,7 @@ fun SettingsScreen(
                     SettingsRow(
                         label    = "Wallpaper Dim",
                         sublabel = "${"%.0f".format(settings.wallpaperDim * 100)}%",
-                        icon     = Icons.Default.BrightnessLow
+                        icon     = Icons.Rounded.BrightnessLow
                     ) {}
                     Slider(
                         value         = settings.wallpaperDim,
@@ -632,7 +473,7 @@ fun SettingsScreen(
 
         // ── Typography ───────────────────────────────────────────────────────
         SettingsSection("Typography") {
-            SettingsRow(label = "Font", sublabel = fontDisplayName(settings.appFont), icon = Icons.Default.FontDownload) {
+            SettingsRow(label = "Font", sublabel = fontDisplayName(settings.appFont), icon = Icons.Rounded.FontDownload) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     win.solobot.omodash.data.AppFont.entries.forEach { font ->
                         FilterChip(
@@ -641,7 +482,7 @@ fun SettingsScreen(
                             label    = { Text(fontDisplayName(font), fontSize = 9.sp, letterSpacing = 0.5.sp) },
                             colors   = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = accent,
-                                selectedLabelColor     = Color.Black
+                                selectedLabelColor     = MaterialTheme.colorScheme.onPrimary
                             )
                         )
                     }
@@ -650,7 +491,7 @@ fun SettingsScreen(
 
             SettingsDivider()
 
-            SettingsRow(label = "Bold Font", sublabel = "Heavier weight across all text", icon = Icons.Default.FormatBold) {
+            SettingsRow(label = "Bold Font", sublabel = "Heavier weight across all text", icon = Icons.Rounded.FormatBold) {
                 Switch(
                     checked         = settings.fontBold,
                     onCheckedChange = { onUpdate { copy(fontBold = it) } },
@@ -664,7 +505,7 @@ fun SettingsScreen(
                 SettingsRow(
                     label    = "Text Scale",
                     sublabel = "${"%.0f".format(settings.textScale * 100)}%",
-                    icon     = Icons.Default.TextFields
+                    icon     = Icons.Rounded.TextFields
                 ) {}
                 Slider(
                     value         = settings.textScale,
@@ -682,7 +523,7 @@ fun SettingsScreen(
                 SettingsRow(
                     label    = "UI Scale",
                     sublabel = "${"%.0f".format(settings.uiScale * 100)}%  — scales all elements",
-                    icon     = Icons.Default.ZoomIn
+                    icon     = Icons.Rounded.ZoomIn
                 ) {}
                 Slider(
                     value         = settings.uiScale,
@@ -706,7 +547,7 @@ fun SettingsScreen(
             SettingsButton(
                 label    = "Reset A-GPS Assistance Data",
                 sublabel = calibrationStatus ?: "Forces cold start to download fresh satellite orbits entirely offline",
-                icon     = Icons.Default.MyLocation,
+                icon     = Icons.Rounded.MyLocation,
                 accent   = accent,
                 onClick  = {
                     calibrationStatus = "Clearing A-GPS cache..."
@@ -743,7 +584,7 @@ fun SettingsScreen(
                 } else {
                     "Guided sweep — Android self-calibrates the compass while you circle"
                 },
-                icon     = Icons.Default.Navigation,
+                icon     = Icons.Rounded.Navigation,
                 accent   = if (isCalibratingCompass) Color.Green else accent,
                 onClick  = {
                     if (!isCalibratingCompass) {
@@ -768,7 +609,7 @@ fun SettingsScreen(
                 SettingsRow(
                     label    = "Compass Heading Offset",
                     sublabel = "Manual Alignment: ${if (settings.compassOffset >= 0) "+" else ""}${settings.compassOffset.toInt()}°  — aligns compass with vehicle front",
-                    icon     = Icons.Default.Explore
+                    icon     = Icons.Rounded.Explore
                 ) {}
                 Slider(
                     value         = settings.compassOffset,
@@ -796,7 +637,7 @@ fun SettingsScreen(
                 colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A0000)),
                 modifier = Modifier.fillMaxWidth().height(44.dp)
             ) {
-                Icon(Icons.Default.RestartAlt, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.RestartAlt, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Reset to Defaults", color = MaterialTheme.colorScheme.error, fontSize = 13.sp, letterSpacing = 1.sp)
             }
@@ -830,55 +671,6 @@ fun SettingsScreen(
         )
     }
 
-    if (showAccentPicker) {
-        ColorPickerDialog(
-            title           = "Accent Color",
-            initialColor    = Color(settings.accentColor),
-            onColorSelected = { c -> onUpdate { copy(accentColor = c.toArgb()) } },
-            onDismiss       = { showAccentPicker = false }
-        )
-    }
-
-    if (showBgPicker) {
-        ColorPickerDialog(
-            title           = "Background Color",
-            initialColor    = Color(settings.backgroundColor),
-            onColorSelected = { c -> 
-                onUpdate { 
-                    copy(
-                        backgroundColor = c.toArgb(),
-                        useCustomBackgroundColor = true
-                    ) 
-                } 
-            },
-            onDismiss       = { showBgPicker = false }
-        )
-    }
-
-    if (showGradientEndPicker) {
-        ColorPickerDialog(
-            title           = "Gradient End Color",
-            initialColor    = Color(settings.gradientEndColor),
-            onColorSelected = { c -> 
-                onUpdate { 
-                    copy(
-                        gradientEndColor = c.toArgb(),
-                        useCustomBackgroundColor = true
-                    ) 
-                } 
-            },
-            onDismiss       = { showGradientEndPicker = false }
-        )
-    }
-
-    if (showFontColorPicker) {
-        ColorPickerDialog(
-            title           = "Font Color",
-            initialColor    = Color(settings.fontColor),
-            onColorSelected = { c -> onUpdate { copy(fontColor = c.toArgb()) } },
-            onDismiss       = { showFontColorPicker = false }
-        )
-    }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -968,7 +760,7 @@ private fun ColumnScope.SettingsButton(
             if (sublabel.isNotEmpty())
                 Text(sublabel, style = MaterialTheme.typography.labelSmall, color = subColor, fontSize = 11.sp)
         }
-        Icon(Icons.Default.ChevronRight, null, tint = chevronC, modifier = Modifier.size(16.dp))
+        Icon(Icons.Rounded.ChevronRight, null, tint = chevronC, modifier = Modifier.size(16.dp))
     }
 }
 

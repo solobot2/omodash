@@ -1,13 +1,18 @@
 package win.solobot.omodash.data
 
-enum class VehicleApp { RADIO, MUSIC, CAMERA, PHONE, CARPLAY, ANDROID_AUTO }
-enum class VehicleLaunch { APP, DESAY_RADIO, DESAY_MUSIC, DESAY_CAMERA }
+enum class VehicleApp { NAVIGATION, CAR_SETTINGS, LOCAL_SETTINGS, NOW_PLAYING, RADIO, MUSIC, CAMERA, PHONE, CARPLAY, ANDROID_AUTO }
+enum class VehicleLaunch { APP, CURRENT_MEDIA, DESAY_RADIO, DESAY_MUSIC, DESAY_CAMERA }
 
 data class VehicleAppBinding(
     val packageName: String,
     val launch: VehicleLaunch = VehicleLaunch.APP,
     val intentAction: String? = null,
-    val mediaButtonEvents: Boolean = false
+    val mediaButtonEvents: Boolean = false,
+    val activityName: String? = null,
+    val intentCategory: String? = null,
+    val intExtras: Map<String, Int> = emptyMap(),
+    val mediaView: Int = 1,
+    val fallbackPackages: List<String> = emptyList()
 )
 
 data class VehiclePreset(
@@ -21,10 +26,10 @@ data class VehiclePreset(
     val allowsAppAssignment get() = id == VehiclePresets.DEFAULT_ID
 
     fun shortcuts() = listOf(
-        Triple(VehicleApp.RADIO, "Radio", DefaultShortcutIcon.RADIO),
-        Triple(VehicleApp.CAMERA, "Camera", DefaultShortcutIcon.CAMERA),
-        Triple(VehicleApp.MUSIC, "Music", DefaultShortcutIcon.MUSIC),
-        Triple(VehicleApp.PHONE, "Phone", DefaultShortcutIcon.PHONE)
+        Triple(VehicleApp.NAVIGATION, "Navigation", DefaultShortcutIcon.NAVIGATION),
+        Triple(VehicleApp.CAR_SETTINGS, "Car Settings", DefaultShortcutIcon.CAR),
+        Triple(VehicleApp.LOCAL_SETTINGS, "Local Settings", DefaultShortcutIcon.SETTINGS),
+        Triple(VehicleApp.NOW_PLAYING, "Now Playing", DefaultShortcutIcon.MUSIC)
     ).map { (app, label, icon) -> ShortcutConfig(binding(app).packageName, label, true, icon) }
 }
 
@@ -34,6 +39,17 @@ object VehiclePresets {
     const val DEFAULT_ID = "default"
     val OMODA_9 = VehiclePreset(OMODA_9_ID, "OMODA 9", "Factory apps for OMODA 9 HW110",
         mapOf(
+            VehicleApp.NAVIGATION to VehicleAppBinding("com.astrob.turbodog",
+                intentAction = "android.intent.action.MAIN", activityName = "com.astrob.turbodog.WelcomeActivity",
+                intentCategory = "android.intent.category.APP_MAPS", fallbackPackages = listOf("com.astrob.turbodog.online")),
+            VehicleApp.CAR_SETTINGS to VehicleAppBinding("com.desaysv.vehiclesetting",
+                intentAction = "com.desaysv.vehiclesetting.ACTION_QUICK_CONTROL_SETTING",
+                activityName = "com.desaysv.vehiclesetting.ui.activity.SettingActivity",
+                intExtras = mapOf("com.vehiclesetting.section" to 8)),
+            VehicleApp.LOCAL_SETTINGS to VehicleAppBinding("com.desaysv.setting",
+                intentAction = "com.desaysv.setting.ACTION_DEVICE_SETTING",
+                activityName = "com.desaysv.setting.view.activity.SettingActivity"),
+            VehicleApp.NOW_PLAYING to VehicleAppBinding("", VehicleLaunch.CURRENT_MEDIA, mediaView = 3),
             VehicleApp.RADIO to VehicleAppBinding("com.desaysv.svaudioapp", VehicleLaunch.DESAY_RADIO),
             VehicleApp.MUSIC to VehicleAppBinding("com.desaysv.svaudioapp", VehicleLaunch.DESAY_MUSIC),
             VehicleApp.CAMERA to VehicleAppBinding("com.desaysv.ivi.vds.rvc", VehicleLaunch.DESAY_CAMERA),
@@ -42,7 +58,10 @@ object VehiclePresets {
                 intentAction = "action.start.carplay", mediaButtonEvents = true),
             VehicleApp.ANDROID_AUTO to VehicleAppBinding("com.google.android.projection.sink", mediaButtonEvents = true)
         ), radioSessionPackages = setOf("com.desaysv.svaudioapp", "com.desaysv.ivi.vds.tuner"))
-    val DEFAULT = VehiclePreset(DEFAULT_ID, "Default", "Assign apps manually for another head unit", emptyMap())
+    val DEFAULT = VehiclePreset(DEFAULT_ID, "Default", "Assign apps manually for another head unit", mapOf(
+        VehicleApp.NAVIGATION to VehicleAppBinding("", intentAction = "android.intent.action.MAIN", intentCategory = "android.intent.category.APP_MAPS"),
+        VehicleApp.LOCAL_SETTINGS to VehicleAppBinding("", intentAction = "android.settings.SETTINGS"),
+        VehicleApp.NOW_PLAYING to VehicleAppBinding("", VehicleLaunch.CURRENT_MEDIA, mediaView = 3)))
     val all = listOf(OMODA_9, DEFAULT)
     @Volatile private var selectedId = DEFAULT_ID
     fun current(): VehiclePreset = find(selectedId)
@@ -51,11 +70,26 @@ object VehiclePresets {
 }
 
 fun DefaultShortcutIcon.vehicleApp(): VehicleApp? = when (this) {
+    DefaultShortcutIcon.NAVIGATION -> VehicleApp.NAVIGATION
+    DefaultShortcutIcon.CAR -> VehicleApp.CAR_SETTINGS
+    DefaultShortcutIcon.SETTINGS -> VehicleApp.LOCAL_SETTINGS
     DefaultShortcutIcon.RADIO -> VehicleApp.RADIO
-    DefaultShortcutIcon.MUSIC -> VehicleApp.MUSIC
+    DefaultShortcutIcon.MUSIC -> VehicleApp.NOW_PLAYING
     DefaultShortcutIcon.CAMERA -> VehicleApp.CAMERA
     DefaultShortcutIcon.PHONE -> VehicleApp.PHONE
     else -> null
+}
+
+fun AppSettings.vehicleBinding(app: VehicleApp): VehicleAppBinding {
+    val preset = VehiclePresets.find(vehiclePresetId)
+    val assigned = when (app) {
+        VehicleApp.CARPLAY -> carPlayPackage.takeIf { it.isNotBlank() }
+        VehicleApp.ANDROID_AUTO -> androidAutoPackage.takeIf { it.isNotBlank() }
+        VehicleApp.RADIO -> radioPackage.takeIf { it.isNotBlank() }
+        else -> vehicleAppPackages[app]
+    }
+    return if (preset.allowsAppAssignment && assigned != null && app != VehicleApp.NOW_PLAYING)
+        VehicleAppBinding(assigned) else preset.binding(app)
 }
 
 /** Preinstalled types retain the theme icon even after an app has been assigned. */

@@ -115,6 +115,39 @@ class MediaWidgetIntegrationTest {
             assertEquals(1, selected.get())
         }
     }
+    @Test fun missingWeatherShowsAnExplanationAndRetry() {
+        val retries = AtomicInteger()
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> activity.setContent {
+                MaterialTheme {
+                    win.solobot.omodash.ui.widget.WeatherWidget(null, Color.White, true,
+                        modifier = Modifier.fillMaxSize(), message = "Weather unavailable", onRetry = { retries.incrementAndGet() })
+                }
+            } }
+            node("Weather unavailable")
+            node("Check the connection and location access.")
+            click("RETRY")
+            assertEquals(1, retries.get())
+        }
+    }
+    @Test fun androidAutoTrackNeedsNoActiveMediaControllerAndWinsOverOldRadio() {
+        val media = NowPlayingState("Android Auto fixture track", "Fixture artist", null,
+            isPlaying = true, controller = null, sourcePackage = "com.google.android.projection.sink", oemSource = 20)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity -> activity.setContent {
+                MaterialTheme {
+                    NowPlayingWidget(media, Color.White, "", "", {}, {}, {}, {}, {}, {}, {},
+                        hardwareRadio = win.solobot.omodash.viewmodel.LauncherViewModel.HardwareRadioState("FM", "99.7"),
+                        modifier = Modifier.fillMaxSize())
+                }
+            } }
+            node("Android Auto fixture track")
+            click("Source Selector")
+            click("All Media")
+            node("Android Auto fixture track")
+            assertNull(find(automation.rootInActiveWindow, "99.7"))
+        }
+    }
     @Test fun assignedFactoryRadioOpensWithoutAskingForAssignment() {
         val opened = AtomicInteger()
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->

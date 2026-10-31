@@ -13,5 +13,14 @@ data class NowPlayingState(
     val isPlaying: Boolean,
     val controller: MediaController?,
     val playbackAction: PlaybackAction = PlaybackAction.DISABLED,
-    val actions: Long = 0L
-)
+    val actions: Long = 0L,
+    val sourcePackage: String? = null,
+    val oemSource: Int? = null,
+    val durationMs: Long = 0L,
+    val positionMs: Long = 0L,
+    val positionUpdatedAtMs: Long = 0L,
+    val playbackSpeed: Float = 0f,
+    val mediaId: String? = null
+) {
+    val packageName: String? get() = sourcePackage ?: controller?.packageName
+}

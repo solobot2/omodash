@@ -6,13 +6,17 @@ OMODA 9 HW110:
 
 | Type | Package | Opening |
 |---|---|---|
+| Navigation | `com.astrob.turbodog` / `.online` | Native `com.astrob.turbodog.WelcomeActivity` |
+| Car Settings | `com.desaysv.vehiclesetting` | `ui.activity.SettingActivity`, `ACTION_QUICK_CONTROL_SETTING`, section 8 |
+| Local Settings | `com.desaysv.setting` | `view.activity.SettingActivity`, `ACTION_DEVICE_SETTING` |
+| Now Playing | Current OEM source | OPEN_SOURCE for the source queried at click time, PLAY_VIEW 3 |
 | Radio | `com.desaysv.svaudioapp` | Desay OPEN_SOURCE, media type 8 |
 | Music | `com.desaysv.svaudioapp` | Desay OPEN_SOURCE, media type 2 |
 | Camera | `com.desaysv.ivi.vds.rvc` | OEM AVM event with existing speed guard |
 | Phone | `com.desaysv.bluetooth.phone` | Package launch |
 | CarPlay | `com.desaysv.vehicle.carplayapp` | `action.start.carplay` |
-| Android Auto | `com.google.android.projection.sink` | Existing local TCP ADB helper |
+| Android Auto | `com.google.android.projection.sink` | Native receiver launch |
 
-Default has no vehicle assignments and allows manual app assignment. Standard shortcut types retain theme icons even after manual assignment. Custom application shortcuts can use native icons. Switching a preset applies its bindings; old pre-preset package assignments are intentionally ignored.
+Default supports manual assignment of the three upper vehicle routes in Settings. Its generic navigation and local-settings intents use Android's map-app category and system Settings action. Home, launcher Settings and Applications are internal destinations and cannot be reassigned. Onboarding and Settings select the same preset catalog.
 
-Now Playing observes all active MediaSessions and their callbacks, including sessions without notifications. Automatic source selection prefers an actively playing music session over retained tuner state. Selecting Any Player or FM/AM explicitly overrides automatic source selection. OMODA 9 FM/AM opens its preset radio and does not offer an application picker.
+The OMODA 9 Now Playing pipeline reads CURRENT_SOURCE_TYPE and the source-specific OEM metadata, including projection sessions omitted by Android's active-session list. Radio is never inferred from track text. The Now Playing menu contains source selection, Open CarPlay, Open Android Auto and widget resizing. Both projection actions use the preset. The source-open command uses the same media PLAY_VIEW as the native card.

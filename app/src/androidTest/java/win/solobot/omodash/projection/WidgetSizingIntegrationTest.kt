@@ -24,7 +24,7 @@ class WidgetSizingIntegrationTest {
     private val automation get() = instrumentation.uiAutomation
     private fun find(root: AccessibilityNodeInfo?, text: String): AccessibilityNodeInfo? {
         root ?: return null
-        if (root.text?.toString() == text) return root
+        if (root.text?.toString() == text || root.contentDescription?.toString() == text) return root
         for (i in 0 until root.childCount) find(root.getChild(i), text)?.let { return it }
         return null
     }
@@ -81,6 +81,33 @@ class WidgetSizingIntegrationTest {
             while (target != null) { if (!target.isEnabled) disabled = true; target = target.parent }
             assertTrue("A size covering the entire occupied grid must be disabled", disabled)
             node("Dimmed sizes do not fit the current layout.")
+        }
+    }
+    @Test fun cardMenuKeepsTheActivityWindowAndCardAnchorAtMaximumScale() {
+        val settings = AppSettings()
+        val anchor = androidx.compose.ui.unit.IntRect(200, 160, 800, 480)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { it.setContent {
+                val density = LocalDensity.current
+                CompositionLocalProvider(LocalDensity provides Density(density.density * 2f, density.fontScale * 2f)) {
+                    OmodashTheme(accent = Color.Cyan, isDayMode = false) {
+                        win.solobot.omodash.ui.components.WidgetOverlay(anchor, {}) {
+                            WidgetContextMenu("WEATHER", settings.widgetSizeRules("WEATHER"), Color.Cyan,
+                                ClockStyle.DIGITAL, false, false, false, {}, {}, {}, {}, {})
+                        }
+                    }
+                }
+            } }
+            node("RESIZE")
+            val item = node("Widget settings")
+            val root = automation.rootInActiveWindow
+            assertEquals("Card settings must not create another window", root.windowId, item.windowId)
+            val rootBounds = android.graphics.Rect()
+            val bounds = android.graphics.Rect()
+            root.getBoundsInScreen(rootBounds)
+            item.getBoundsInScreen(bounds)
+            assertTrue("Menu must be centered on its card: $bounds in $rootBounds", kotlin.math.abs(bounds.centerX() - rootBounds.left - 500) <= 3)
+            assertTrue("Menu must retain the card's vertical center: $bounds in $rootBounds", kotlin.math.abs(bounds.centerY() - rootBounds.top - 320) <= 6)
         }
     }
     @Test fun pickerCanApplyAValidSizeAtMaximumUiAndFontScale() {

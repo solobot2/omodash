@@ -7,7 +7,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -134,7 +134,7 @@ fun AltimeterWidget(
 
         // Center car icon showing roll angle
         Icon(
-            imageVector        = Icons.Default.DirectionsCar,
+            imageVector        = Icons.Rounded.DirectionsCar,
             contentDescription = null,
             tint               = iconTint,
             modifier           = Modifier

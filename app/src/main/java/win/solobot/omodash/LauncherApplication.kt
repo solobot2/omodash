@@ -7,6 +7,5 @@ class LauncherApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         DiagnosticLog.initialize(this)
-        win.solobot.omodash.diagnostics.PerformanceTrace.start(this)
     }
 }

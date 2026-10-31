@@ -33,53 +33,32 @@ fun filledControlColors(): androidx.compose.material3.ButtonColors {
 
 @Composable
 fun OmodashTheme(
-    accent: Color     = AccentWhite,
-    background: Color = Black,
-    textColor: Color  = Color.White,
     fontBold: Boolean = false,
-    textScale: Float  = 1.0f,
-    appFont: AppFont  = AppFont.JETBRAINS_MONO,
+    textScale: Float = 1.0f,
+    appFont: AppFont = AppFont.SYSTEM,
     isDayMode: Boolean = false,
-    useCustomBg: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    // Contrast-aware: the accent is user-chosen and can be any brightness,
-    // so a fixed onPrimary (white) goes invisible on light accents
-    val onAccent = if (accent.luminance() > 0.5f) Color.Black else Color.White
-    val colorScheme = if (isDayMode) lightColorScheme(
-        primary          = accent,
-        onPrimary        = onAccent,
-        secondary        = accent.copy(alpha = 0.7f),
-        onSecondary      = onAccent,
-        tertiary         = accent.copy(alpha = 0.5f),
-        background       = if (useCustomBg) background else Color(0xFFEEEEEE),
-        surface          = Color(0xFFFFFFFF),
-        onBackground     = Color(0xFF111111),
-        onSurface        = Color(0xFF111111),
-        surfaceVariant   = Color(0xFFF5F5F5),
-        onSurfaceVariant = Color(0xFF666666),
-        outline          = Color(0xFFCCCCCC)
+    val p = if (isDayMode) DayDashboard else NightDashboard
+    val scheme = if (isDayMode) lightColorScheme(
+        primary = p.navAccent, onPrimary = Color.White,
+        secondary = p.hvacAccent, onSecondary = Color.White,
+        background = p.backgroundBottom, onBackground = p.text,
+        surface = p.cardTop, onSurface = p.text,
+        surfaceVariant = p.panelBottom, onSurfaceVariant = p.muted,
+        outline = p.edgeBottom
     ) else darkColorScheme(
-        primary          = accent,
-        onPrimary        = onAccent,
-        secondary        = accent.copy(alpha = 0.7f),
-        onSecondary      = onAccent,
-        tertiary         = accent.copy(alpha = 0.5f),
-        background       = background,
-        surface          = CardSurface,
-        onBackground     = textColor,
-        onSurface        = textColor,
-        surfaceVariant   = DimSurface,
-        onSurfaceVariant = TextMuted,
-        outline          = DividerGray
+        primary = p.navAccent, onPrimary = Color(0xFF032219),
+        secondary = p.hvacAccent, onSecondary = Color(0xFF2C2007),
+        background = p.backgroundBottom, onBackground = p.text,
+        surface = p.cardTop, onSurface = p.text,
+        surfaceVariant = p.panelBottom, onSurfaceVariant = p.muted,
+        outline = p.edgeBottom
     )
-    CompositionLocalProvider(LocalDayMode provides isDayMode) {
-        MaterialTheme(
-            colorScheme = colorScheme,
-            typography  = launcherTypography(fontBold, textScale, appFont.toFontFamily()),
-            content = {
-                CompositionLocalProvider(LocalContentColor provides colorScheme.onBackground, content = content)
-            }
-        )
+    CompositionLocalProvider(LocalDayMode provides isDayMode, LocalDashboardPalette provides p) {
+        MaterialTheme(colorScheme = scheme,
+            typography = launcherTypography(fontBold, textScale, appFont.toFontFamily())) {
+            CompositionLocalProvider(LocalContentColor provides p.text, content = content)
+        }
     }
 }

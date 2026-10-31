@@ -20,9 +20,7 @@ class SettingsRepository(private val context: Context) {
     private object Keys {
         val VEHICLE_PRESET = stringPreferencesKey("vehicle_preset")
         val VEHICLE_NAME       = stringPreferencesKey("vehicle_name")
-        val ACCENT_COLOR       = intPreferencesKey("accent_color")
-        val BG_COLOR           = intPreferencesKey("bg_color")
-        val FONT_COLOR         = intPreferencesKey("font_color")
+        val VEHICLE_APP_PACKAGES = stringPreferencesKey("vehicle_app_packages")
         val WALLPAPER_URI      = stringPreferencesKey("wallpaper_uri")
         val FONT_BOLD          = booleanPreferencesKey("font_bold")
         val TEXT_SCALE         = floatPreferencesKey("text_scale")
@@ -41,12 +39,9 @@ class SettingsRepository(private val context: Context) {
         val WIDGET_LAYOUT_JSON = stringPreferencesKey("widget_layout_json")
         val CAR_PLAY_PACKAGE      = stringPreferencesKey("preset_car_play_package")
         val ANDROID_AUTO_PACKAGE  = stringPreferencesKey("preset_android_auto_package")
-        val USE_GRADIENT          = booleanPreferencesKey("use_gradient")
-        val GRADIENT_END_COLOR    = intPreferencesKey("gradient_end_color")
         val WALLPAPER_DIM         = floatPreferencesKey("wallpaper_dim")
         val RIGHT_HAND_DRIVE      = booleanPreferencesKey("right_hand_drive") // kept for migration
         val SIDEBAR_POSITION           = stringPreferencesKey("sidebar_position")
-        val BOTTOM_BAR_SHORTCUTS_RIGHT = booleanPreferencesKey("bottom_bar_shortcuts_right")
         val DAY_NIGHT_MODE        = stringPreferencesKey("day_night_mode")
         val RADIO_PACKAGE         = stringPreferencesKey("preset_radio_package")
         val ONBOARDING_COMPLETED  = booleanPreferencesKey("onboarding_completed")
@@ -57,8 +52,6 @@ class SettingsRepository(private val context: Context) {
         val SOUNDBOARD_PADS_JSON  = stringPreferencesKey("soundboard_pads_json")
         val VITALS_AS_BARS        = booleanPreferencesKey("vitals_as_bars")
         val SPEEDOMETER_DIGITAL_ONLY = booleanPreferencesKey("speedometer_digital_only")
-        val GRADIENT_DIRECTION    = stringPreferencesKey("gradient_direction")
-        val USE_CUSTOM_BG_COLOR   = booleanPreferencesKey("use_custom_bg_color")
     }
 
     val settingsFlow: Flow<AppSettings> = context.dataStore.data
@@ -92,9 +85,10 @@ class SettingsRepository(private val context: Context) {
             return AppSettings(
                 vehiclePresetId = defaults.vehiclePresetId,
                 vehicleName    = prefs[Keys.VEHICLE_NAME]     ?: defaults.vehicleName,
-                accentColor    = prefs[Keys.ACCENT_COLOR]     ?: defaults.accentColor,
-                backgroundColor = prefs[Keys.BG_COLOR]        ?: defaults.backgroundColor,
-                fontColor      = prefs[Keys.FONT_COLOR]       ?: defaults.fontColor,
+                vehicleAppPackages = prefs[Keys.VEHICLE_APP_PACKAGES]?.let {
+                    runCatching { gson.fromJson<Map<VehicleApp, String>>(it,
+                        object : TypeToken<Map<VehicleApp, String>>() {}.type) }.getOrNull()
+                } ?: emptyMap(),
                 wallpaperUri   = prefs[Keys.WALLPAPER_URI]    ?: defaults.wallpaperUri,
                 fontBold       = prefs[Keys.FONT_BOLD]        ?: defaults.fontBold,
                 textScale      = launcherScale(prefs[Keys.TEXT_SCALE] ?: defaults.textScale),
@@ -112,11 +106,8 @@ class SettingsRepository(private val context: Context) {
                 widgetLayout   = widgets,
                 carPlayPackage      = prefs[Keys.CAR_PLAY_PACKAGE] ?: defaults.carPlayPackage,
                 androidAutoPackage  = prefs[Keys.ANDROID_AUTO_PACKAGE] ?: defaults.androidAutoPackage,
-                useGradient      = prefs[Keys.USE_GRADIENT]        ?: defaults.useGradient,
-                gradientEndColor = prefs[Keys.GRADIENT_END_COLOR]  ?: defaults.gradientEndColor,
                 wallpaperDim     = prefs[Keys.WALLPAPER_DIM]       ?: defaults.wallpaperDim,
                 sidebarPosition  = migrateSidebarPosition(prefs[Keys.SIDEBAR_POSITION], prefs[Keys.RIGHT_HAND_DRIVE] == true),
-                bottomBarShortcutsRight = prefs[Keys.BOTTOM_BAR_SHORTCUTS_RIGHT] ?: defaults.bottomBarShortcutsRight,
                 dayNightMode     = prefs[Keys.DAY_NIGHT_MODE]?.let { runCatching { DayNightMode.valueOf(it) }.getOrNull() } ?: defaults.dayNightMode,
                 radioPackage     = prefs[Keys.RADIO_PACKAGE] ?: defaults.radioPackage,
                 onboardingCompleted = prefs[Keys.ONBOARDING_COMPLETED] ?: defaults.onboardingCompleted,
@@ -131,8 +122,6 @@ class SettingsRepository(private val context: Context) {
                 } ?: defaults.soundboardPads,
                 vitalsAsBars     = prefs[Keys.VITALS_AS_BARS] ?: defaults.vitalsAsBars,
                 speedometerDigitalOnly = prefs[Keys.SPEEDOMETER_DIGITAL_ONLY] ?: defaults.speedometerDigitalOnly,
-                gradientDirection = prefs[Keys.GRADIENT_DIRECTION]?.let { runCatching { GradientDirection.valueOf(it) }.getOrNull() } ?: defaults.gradientDirection,
-                useCustomBackgroundColor = prefs[Keys.USE_CUSTOM_BG_COLOR] ?: defaults.useCustomBackgroundColor
             ).withVehicleBindings().withValidWidgetLayout()
     }
 
@@ -153,9 +142,7 @@ class SettingsRepository(private val context: Context) {
             VehiclePresets.select(s.vehiclePresetId)
             prefs[Keys.VEHICLE_PRESET] = s.vehiclePresetId
             prefs[Keys.VEHICLE_NAME]       = s.vehicleName
-            prefs[Keys.ACCENT_COLOR]       = s.accentColor
-            prefs[Keys.BG_COLOR]           = s.backgroundColor
-            prefs[Keys.FONT_COLOR]         = s.fontColor
+            prefs[Keys.VEHICLE_APP_PACKAGES] = gson.toJson(s.vehicleAppPackages)
             prefs[Keys.WALLPAPER_URI]      = s.wallpaperUri
             prefs[Keys.FONT_BOLD]          = s.fontBold
             prefs[Keys.TEXT_SCALE]         = launcherScale(s.textScale)
@@ -174,11 +161,8 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.WIDGET_LAYOUT_JSON] = gson.toJson(s.widgetLayout)
             prefs[Keys.CAR_PLAY_PACKAGE]      = s.carPlayPackage
             prefs[Keys.ANDROID_AUTO_PACKAGE]  = s.androidAutoPackage
-            prefs[Keys.USE_GRADIENT]       = s.useGradient
-            prefs[Keys.GRADIENT_END_COLOR] = s.gradientEndColor
             prefs[Keys.WALLPAPER_DIM]      = s.wallpaperDim
             prefs[Keys.SIDEBAR_POSITION]           = s.sidebarPosition.name
-            prefs[Keys.BOTTOM_BAR_SHORTCUTS_RIGHT] = s.bottomBarShortcutsRight
             prefs[Keys.DAY_NIGHT_MODE]     = s.dayNightMode.name
             prefs[Keys.RADIO_PACKAGE]      = s.radioPackage
             prefs[Keys.ONBOARDING_COMPLETED] = s.onboardingCompleted
@@ -189,8 +173,6 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.SOUNDBOARD_PADS_JSON] = gson.toJson(s.soundboardPads)
             prefs[Keys.VITALS_AS_BARS]     = s.vitalsAsBars
             prefs[Keys.SPEEDOMETER_DIGITAL_ONLY] = s.speedometerDigitalOnly
-            prefs[Keys.GRADIENT_DIRECTION] = s.gradientDirection.name
-            prefs[Keys.USE_CUSTOM_BG_COLOR] = s.useCustomBackgroundColor
     }
 
     suspend fun resetToDefaults() {

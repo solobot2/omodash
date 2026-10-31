@@ -8,6 +8,7 @@ import android.media.session.PlaybackState
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import win.solobot.omodash.model.NowPlayingState
+import win.solobot.omodash.model.stableArtwork
 import win.solobot.omodash.model.playbackActionFor
 import win.solobot.omodash.diagnostics.DiagnosticLog
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +24,7 @@ class MediaListenerService : NotificationListenerService() {
 
     private val controllerCallback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) = refreshNowPlaying()
-        override fun onMetadataChanged(metadata: MediaMetadata?)   = refreshNowPlaying(forceMetadata = true)
+        override fun onMetadataChanged(metadata: MediaMetadata?)   = refreshNowPlaying()
         override fun onSessionDestroyed()                          = refreshNowPlaying()
     }
 
@@ -73,7 +74,7 @@ class MediaListenerService : NotificationListenerService() {
         controllers.clear()
     }
 
-    private fun refreshNowPlaying(forceMetadata: Boolean = false) {
+    private fun refreshNowPlaying() {
         val msm = getSystemService(MEDIA_SESSION_SERVICE) as? MediaSessionManager ?: return
         val sessions = try {
             msm.getActiveSessions(ComponentName(this, MediaListenerService::class.java))
@@ -98,10 +99,10 @@ class MediaListenerService : NotificationListenerService() {
         if (controller?.sessionToken != _nowPlaying.value?.controller?.sessionToken) {
             DiagnosticLog.event("Media", "Selected session ${controller?.packageName ?: "none"}")
         }
-        updateFromController(controller, forceMetadata)
+        updateFromController(controller)
     }
 
-    private fun updateFromController(controller: MediaController?, forceMetadata: Boolean) {
+    private fun updateFromController(controller: MediaController?) {
         if (controller == null) { _nowPlaying.value = null; return }
         val meta = controller.metadata
         val title = meta?.getString(MediaMetadata.METADATA_KEY_TITLE)
@@ -113,16 +114,25 @@ class MediaListenerService : NotificationListenerService() {
             ?: ""
         // Prefer the largest bitmap the source provides; many apps put a
         // downscaled image in ALBUM_ART and the full one in ART (or vice versa)
-        val art = try {
+        val incomingArt = try {
             listOfNotNull(
                 meta?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART),
                 meta?.getBitmap(MediaMetadata.METADATA_KEY_ART),
                 meta?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
             ).maxByOrNull { it.width * it.height }
         } catch (_: Exception) { null }
-        val artUri = meta?.getString(MediaMetadata.METADATA_KEY_ART_URI)
-            ?: meta?.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
-            ?: meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)
+        val prev = _nowPlaying.value
+        val sameSong = prev != null && prev.controller?.sessionToken == controller.sessionToken &&
+            prev.title == title && prev.artist == artist
+        val mediaId = meta?.getString(MediaMetadata.METADATA_KEY_MEDIA_ID) ?: prev?.takeIf { sameSong }?.mediaId
+        val sameTrack = sameSong && (prev?.mediaId == null || mediaId == null || prev.mediaId == mediaId)
+        val art = stableArtwork(prev?.albumArt, incomingArt, sameTrack)
+        val artUri = meta?.getString(MediaMetadata.METADATA_KEY_ART_URI)?.takeIf { it.isNotBlank() }
+            ?: meta?.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)?.takeIf { it.isNotBlank() }
+            ?: meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)?.takeIf { it.isNotBlank() }
+            ?: prev?.takeIf { sameTrack }?.artUri
+        val durationMs = if (meta?.containsKey(MediaMetadata.METADATA_KEY_DURATION) == true)
+            meta.getLong(MediaMetadata.METADATA_KEY_DURATION) else prev?.takeIf { sameTrack }?.durationMs ?: 0L
         val playbackState = controller.playbackState
         val isPlaying = playbackState?.state == PlaybackState.STATE_PLAYING
         val playbackAction = playbackActionFor(playbackState?.state, playbackState?.actions ?: 0L)
@@ -131,12 +141,14 @@ class MediaListenerService : NotificationListenerService() {
         // Skip redundant emissions: metadata bitmaps parcel into fresh instances on
         // every read, so a plain data-class compare would never match and every
         // notification would force a recomposition + art redraw.
-        val prev = _nowPlaying.value
-        if (!forceMetadata && prev != null &&
+        if (prev != null &&
             prev.controller?.sessionToken == controller.sessionToken &&
             prev.title == title && prev.artist == artist &&
             prev.isPlaying == isPlaying && prev.playbackAction == playbackAction && prev.actions == actions && prev.artUri == artUri &&
-            (prev.albumArt != null) == (art != null)
+            prev.albumArt === art && prev.mediaId == mediaId && prev.durationMs == durationMs &&
+            prev.positionMs == (playbackState?.position ?: 0L) &&
+            prev.positionUpdatedAtMs == (playbackState?.lastPositionUpdateTime ?: 0L) &&
+            prev.playbackSpeed == (playbackState?.playbackSpeed ?: 0f)
         ) return
 
         _nowPlaying.value = NowPlayingState(
@@ -147,7 +159,13 @@ class MediaListenerService : NotificationListenerService() {
             isPlaying  = isPlaying,
             controller = controller,
             playbackAction = playbackAction,
-            actions = actions
+            actions = actions,
+            sourcePackage = controller.packageName,
+            mediaId = mediaId,
+            durationMs = durationMs,
+            positionMs = playbackState?.position ?: 0L,
+            positionUpdatedAtMs = playbackState?.lastPositionUpdateTime ?: 0L,
+            playbackSpeed = playbackState?.playbackSpeed ?: 0f
         )
     }
 

@@ -1,14 +1,11 @@
 package win.solobot.omodash.data
 
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 
 enum class ClockStyle { DIGITAL, ANALOG }
 enum class UnitSystem { METRIC, IMPERIAL }
 enum class AppFont { SYSTEM, JETBRAINS_MONO, SOURCE_CODE_PRO }
-enum class DayNightMode { DARK, LIGHT, AUTO, SYSTEM }
+enum class DayNightMode { DARK, LIGHT, AUTO }
 enum class SidebarPosition { LEFT, RIGHT }
-enum class GradientDirection { TOP_TO_BOTTOM, LEFT_TO_RIGHT, DIAGONAL, RADIAL }
 
 enum class DefaultShortcutIcon {
     NONE,
@@ -65,16 +62,14 @@ data class WidgetConfig(
 data class AppSettings(
     val vehiclePresetId: String = VehiclePresets.current().id,
     val vehicleName: String = "MY CAR",
-    val accentColor: Int = Color.White.toArgb(),
-    val backgroundColor: Int = Color.Black.toArgb(),
-    val fontColor: Int = Color.White.toArgb(),
+    val vehicleAppPackages: Map<VehicleApp, String> = emptyMap(),
     val wallpaperUri: String = "",
     val fontBold: Boolean = false,
-    val textScale: Float = 1.2f,
+    val textScale: Float = 1.0f,
     val uiScale: Float = 1.0f,
     val clockStyle: ClockStyle = ClockStyle.DIGITAL,
     val unitSystem: UnitSystem = UnitSystem.METRIC,
-    val appFont: AppFont = AppFont.JETBRAINS_MONO,
+    val appFont: AppFont = AppFont.SYSTEM,
     val showWeather: Boolean = true,
     val showClock: Boolean = true,
     val showTelemetry: Boolean = true,
@@ -83,14 +78,11 @@ data class AppSettings(
     val widgetLayout: List<WidgetConfig> = defaultWidgetLayout(),
     val carPlayPackage: String = VehiclePresets.current().binding(VehicleApp.CARPLAY).packageName,
     val androidAutoPackage: String = VehiclePresets.current().binding(VehicleApp.ANDROID_AUTO).packageName,
-    val useGradient: Boolean = false,
-    val gradientEndColor: Int = Color.Black.toArgb(),
     val wallpaperDim: Float = 0.55f,
     val sidebarPosition: SidebarPosition = SidebarPosition.LEFT,
-    val bottomBarShortcutsRight: Boolean = false,
     val showAltimeter: Boolean = false,
     val showSpeedometer: Boolean = false,
-    val dayNightMode: DayNightMode = DayNightMode.DARK,
+    val dayNightMode: DayNightMode = DayNightMode.AUTO,
     // Current preset radio (or a manual assignment in Default).
     val radioPackage: String = VehiclePresets.current().binding(VehicleApp.RADIO).packageName,
     val onboardingCompleted: Boolean = false,
@@ -100,9 +92,7 @@ data class AppSettings(
     val showSoundboard: Boolean = false,
     val soundboardPads: List<SoundPadConfig> = defaultSoundboardPads(),
     val vitalsAsBars: Boolean = false,
-    val speedometerDigitalOnly: Boolean = false,
-    val gradientDirection: GradientDirection = GradientDirection.DIAGONAL,
-    val useCustomBackgroundColor: Boolean = false
+    val speedometerDigitalOnly: Boolean = false
 )
 
 fun defaultShortcuts() = VehiclePresets.current().shortcuts()

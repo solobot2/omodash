@@ -3,6 +3,9 @@ package win.solobot.omodash.ui.widget
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,7 +23,9 @@ fun WeatherWidget(
     accent: Color,
     metric: Boolean,
     isDayMode: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    message: String = "Waiting for weather data",
+    onRetry: (() -> Unit)? = null
 ) {
     val contentColor = if (isDayMode) Color(0xFF111111) else MaterialTheme.colorScheme.onBackground
     val subColor     = if (isDayMode) Color(0xFF888888) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
@@ -55,6 +60,15 @@ fun WeatherWidget(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+        } else {
+            Column(Modifier.fillMaxSize().padding(start = 14.dp, end = 14.dp, top = 32.dp, bottom = 8.dp)
+                .verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(message, color = contentColor, fontSize = 12.sp, lineHeight = 16.sp)
+                Text("Check the connection and location access.", color = subColor, fontSize = 10.sp, lineHeight = 14.sp)
+                if (onRetry != null) TextButton(onClick = onRetry) {
+                    Text("RETRY", color = contentColor, fontSize = 11.sp)
+                }
             }
         }
     }

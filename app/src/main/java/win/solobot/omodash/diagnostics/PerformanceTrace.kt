@@ -61,5 +61,6 @@ object PerformanceTrace {
             .put("nativeHeapBytes", Debug.getNativeHeapAllocatedSize())
             .put("systemAvailableBytes", memory.availMem).put("systemTotalBytes", memory.totalMem)
             .put("systemLowMemory", memory.lowMemory).put("systemLowMemoryThresholdBytes", memory.threshold)
+            .put("telemetry", TelemetryDiagnostics.snapshot())
     }
 }

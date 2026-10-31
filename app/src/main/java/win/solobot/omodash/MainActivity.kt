@@ -26,8 +26,10 @@ import win.solobot.omodash.data.VehicleLaunch
 import win.solobot.omodash.data.vehicleApp
 import win.solobot.omodash.data.withVehiclePreset
 import win.solobot.omodash.data.SidebarPosition
-import win.solobot.omodash.data.GradientDirection
+import win.solobot.omodash.ui.components.dashboardBackground
 import win.solobot.omodash.model.NavDestination
+import win.solobot.omodash.ui.components.ClimateBar
+import win.solobot.omodash.ui.components.ProvidePanelDimensions
 import win.solobot.omodash.ui.components.Sidebar
 import win.solobot.omodash.ui.screen.*
 import win.solobot.omodash.ui.theme.OmodashTheme
@@ -48,12 +50,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun configureSystemBars() {
-        // The vehicle's navigation bar contains the persistent climate controls.
-        WindowCompat.setDecorFitsSystemWindows(window, true)
+        // Our climate bar owns the bottom edge while this Activity is in front.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowCompat.getInsetsController(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.statusBars())
-            show(WindowInsetsCompat.Type.navigationBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
 
@@ -73,19 +74,25 @@ class MainActivity : ComponentActivity() {
         setContent {
             val settingsLoaded by vm.settingsLoaded.collectAsStateWithLifecycle()
             val settings       by vm.settings.collectAsStateWithLifecycle()
+            val climate        by vm.climate.collectAsStateWithLifecycle()
             val nav            by vm.nav.collectAsStateWithLifecycle()
             val apps        by vm.apps.collectAsStateWithLifecycle()
             val appsLoading by vm.appsLoading.collectAsStateWithLifecycle()
             val nowPlaying  by vm.nowPlaying.collectAsStateWithLifecycle()
             val weather     by vm.weather.collectAsStateWithLifecycle()
+            val weatherError by vm.weatherError.collectAsStateWithLifecycle()
+            val weatherLoading by vm.weatherLoading.collectAsStateWithLifecycle()
             val location    by vm.location.collectAsStateWithLifecycle()
             val bearing     by vm.compassBearing.collectAsStateWithLifecycle()
             val isWifi      by vm.isWifi.collectAsStateWithLifecycle()
             val isData      by vm.isData.collectAsStateWithLifecycle()
-            val isDayModeVM by vm.isDayMode.collectAsStateWithLifecycle()
             val hardwareRadio by vm.hardwareRadio.collectAsStateWithLifecycle()
             val systemIsDark = isSystemInDarkTheme()
-            val isDayMode = if (settings.dayNightMode == DayNightMode.SYSTEM) !systemIsDark else isDayModeVM
+            val isDayMode = when (settings.dayNightMode) {
+                DayNightMode.LIGHT -> true
+                DayNightMode.DARK -> false
+                DayNightMode.AUTO -> !systemIsDark
+            }
             val pickerSlot      by vm.shortcutPickerSlot.collectAsStateWithLifecycle()
             val appPickerTarget by vm.appPickerTarget.collectAsStateWithLifecycle()
 
@@ -105,23 +112,7 @@ class MainActivity : ComponentActivity() {
                 onDispose { lifecycle.removeObserver(observer) }
             }
 
-            val accent         = Color(settings.accentColor)
-            val bg             = if (settings.useCustomBackgroundColor) {
-                Color(settings.backgroundColor)
-            } else {
-                if (isDayMode) Color(0xFFEEEEEE) else Color.Black
-            }
-            val textColor      = if (isDayMode) Color(0xFF111111) else Color(settings.fontColor)
-            val bgGradientEnd  = Color(settings.gradientEndColor)
-            val bgBrush        = if (settings.useCustomBackgroundColor && settings.useGradient) {
-                val colors = listOf(bg, bgGradientEnd)
-                when (settings.gradientDirection) {
-                    GradientDirection.TOP_TO_BOTTOM -> androidx.compose.ui.graphics.Brush.verticalGradient(colors)
-                    GradientDirection.LEFT_TO_RIGHT -> androidx.compose.ui.graphics.Brush.horizontalGradient(colors)
-                    GradientDirection.DIAGONAL -> androidx.compose.ui.graphics.Brush.linearGradient(colors)
-                    GradientDirection.RADIAL -> androidx.compose.ui.graphics.Brush.radialGradient(colors)
-                }
-            } else null
+            val accent = (if (isDayMode) win.solobot.omodash.ui.theme.DayDashboard else win.solobot.omodash.ui.theme.NightDashboard).navAccent
 
             val baseDensity = LocalDensity.current
             CompositionLocalProvider(
@@ -133,56 +124,49 @@ class MainActivity : ComponentActivity() {
                 if (!settingsLoaded) {
                     Box(modifier = Modifier.fillMaxSize().background(Color.Black))
                 } else OmodashTheme(
-                    accent     = accent,
-                    background = bg,
-                    textColor  = textColor,
                     fontBold   = settings.fontBold,
                     textScale  = 1f,
                     appFont    = settings.appFont,
-                    isDayMode  = isDayMode,
-                    useCustomBg = settings.useCustomBackgroundColor
+                    isDayMode  = isDayMode
                 ) {
-                if (!settings.onboardingCompleted) {
-                    OnboardingScreen(
-                        accent = accent,
-                        presetId = settings.vehiclePresetId,
-                        onSelectPreset = { id -> vm.updateSettings { withVehiclePreset(id) } },
-                        onComplete = {
-                            vm.updateSettings { copy(onboardingCompleted = true) }
-                            // Start location updates immediately upon completion
-                            vm.startLocationUpdates()
+                ProvidePanelDimensions {
+                    if (!settings.onboardingCompleted) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                OnboardingScreen(
+                                    accent = accent,
+                                    presetId = settings.vehiclePresetId,
+                                    onSelectPreset = { id -> vm.updateSettings { withVehiclePreset(id) } },
+                                    onComplete = {
+                                        vm.updateSettings { copy(onboardingCompleted = true) }
+                                        // Start location updates immediately upon completion
+                                        vm.startLocationUpdates()
+                                    }
+                                )
+                            }
+                            ClimateBar(climate, vm::onClimateAction)
                         }
-                    )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize().let { m ->
-                        if (bgBrush != null) m.background(bgBrush) else m.background(bg)
-                    }) {
-                        // Optional wallpaper layer
-                        if (settings.wallpaperUri.isNotEmpty()) {
-                            AsyncImage(
-                                model              = android.net.Uri.parse(settings.wallpaperUri),
-                                contentDescription = null,
-                                contentScale       = androidx.compose.ui.layout.ContentScale.Crop,
-                                modifier           = Modifier.fillMaxSize()
-                            )
-                            Box(modifier = Modifier.fillMaxSize()
-                                .background(Color.Black.copy(alpha = settings.wallpaperDim)))
-                        }
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize().dashboardBackground()) {
+                            // Optional wallpaper layer
+                            if (settings.wallpaperUri.isNotEmpty()) {
+                                AsyncImage(
+                                    model              = android.net.Uri.parse(settings.wallpaperUri),
+                                    contentDescription = null,
+                                    contentScale       = androidx.compose.ui.layout.ContentScale.Crop,
+                                    modifier           = Modifier.fillMaxSize()
+                                )
+                                Box(modifier = Modifier.fillMaxSize()
+                                    .background(Color.Black.copy(alpha = settings.wallpaperDim)))
+                            }
 
-                        val layoutDivColor = if (isDayMode) Color(0xFFCCCCCC) else Color(0xFF1A1A1A)
 
-                        val sidebarContent: @Composable () -> Unit = {
-                            val sidebarDensity = Density(
-                                density = baseDensity.density * (1.0f + (settings.uiScale - 1.0f) * 0.35f),
-                                fontScale = baseDensity.fontScale * settings.textScale
-                            )
-                            CompositionLocalProvider(LocalDensity provides sidebarDensity) {
+                            val sidebarContent: @Composable () -> Unit = {
                                 Sidebar(
                                     currentDest   = nav,
                                     settings      = settings,
-                                    installedIconFor = { pkg ->
-                                        apps.find { it.packageName == pkg }?.icon
-                                    },
+                                    nowPlayingAvailable = nowPlaying?.packageName != null || (nowPlaying?.oemSource ?: 0) > 0,
+                                    onVehicleApp = { app -> closeProjection(); vm.launchVehicleApp(app) },
                                     onNavigate    = { dest ->
                                         closeProjection()
                                         vm.cancelShortcutPicker()
@@ -190,143 +174,132 @@ class MainActivity : ComponentActivity() {
                                         vm.exitRearrangeMode()
                                         vm.navigate(dest)
                                     },
-                                    onShortcutClick = { slot ->
-                                        closeProjection()
-                                        val shortcut = settings.shortcuts[slot]
-                                        if (shortcut.packageName.isNotEmpty()) {
-                                            val binding = shortcut.defaultIcon.vehicleApp()?.let {
-                                                VehiclePresets.find(settings.vehiclePresetId).binding(it)
-                                            }
-                                            when (binding?.launch) {
-                                                VehicleLaunch.DESAY_CAMERA -> vm.launchCamera()
-                                                VehicleLaunch.DESAY_RADIO -> vm.launchFactoryAudio(true)
-                                                VehicleLaunch.DESAY_MUSIC -> vm.launchFactoryAudio(false)
-                                                else -> vm.launchApp(shortcut.packageName)
-                                            }
-                                        } else vm.startShortcutPicker(slot)
-                                    },
-                                    onShortcutLongPress  = { slot -> vm.startShortcutPicker(slot) },
-                                    onShortcutRemove     = { slot -> vm.removeShortcut(slot) },
-                                    onShortcutSetIcon    = { slot, icon -> vm.setShortcutIcon(slot, icon) },
-                                    onReorder            = { from, to -> vm.reorderShortcut(from, to) }
+
                                 )
                             }
-                        }
 
-                        val mainPane: @Composable (Modifier) -> Unit = { paneModifier ->
-                            // ── Main content pane ─────────────────────────────
-                            AnimatedContent(
-                                targetState   = nav,
-                                transitionSpec = {
-                                    fadeIn() + slideInHorizontally { it / 10 } togetherWith
-                                    fadeOut() + slideOutHorizontally { -it / 10 }
-                                },
-                                modifier = paneModifier,
-                                label    = "pane_transition"
-                            ) { destination ->
-                                when (destination) {
-                                    NavDestination.HOME -> HomeScreen(
-                                        settings            = settings,
-                                        weather             = weather,
-                                        nowPlaying          = nowPlaying,
-                                        location            = location,
-                                        bearing             = bearing,
-                                        isWifi              = isWifi,
-                                        isData              = isData,
-                                        isDayMode           = isDayMode,
-                                        onPlayPause         = vm::playPause,
-                                        onNext              = vm::skipNext,
-                                        onPrev              = vm::skipPrev,
-                                        onLaunchCarPlay     = { vm.launchApp(settings.carPlayPackage) },
-                                        onLaunchAndroidAuto = { openProjection(settings.androidAutoPackage) },
-                                        onTapNowPlaying = {
-                                            val pkg = nowPlaying?.controller?.packageName
-                                            if (pkg == settings.androidAutoPackage) openProjection(pkg)
-                                            else vm.openCurrentMediaApp()
-                                        },
-                                        onUpdateWidget      = { id, sx, sy -> vm.updateWidgetConfig(id, sx, sy) },
-                                        onMoveWidget        = { id, gx, gy -> vm.moveWidgetConfig(id, gx, gy) },
-                                        onAddWidget         = { id -> vm.addWidget(id) },
-                                        onRemoveWidget      = { id -> vm.removeWidget(id) },
-                                        onSetClockStyle     = { style -> vm.updateSettings { copy(clockStyle = style) } },
-                                        onSetVitalsAsBars   = { asBars -> vm.updateSettings { copy(vitalsAsBars = asBars) } },
-                                        onSetSpeedometerDigitalOnly = { digital -> vm.updateSettings { copy(speedometerDigitalOnly = digital) } },
-                                        onUpdateSoundPad    = { idx, pad -> vm.updateSoundboardPad(idx, pad) },
-                                        hardwareRadio         = hardwareRadio,
-                                        onLaunchHardwareRadio = { vm.launchHardwareRadioApp() },
-                                        onStartHardwareRadio = vm::startHardwareRadioPlayback,
-                                        onStopHardwareRadio   = { vm.stopHardwareRadioApp() },
-                                        onRadioSeekUp         = { vm.radioSeekUp() },
-                                        onRadioSeekDown       = { vm.radioSeekDown() },
-                                        onRadioCycleFm        = { vm.radioCycleFm() },
-                                        onRadioSwitchAm       = { vm.radioSwitchAm() },
-                                        onRadioTune           = { band, freq -> vm.radioTune(band, freq) },
-                                        onAssignRadio         = { vm.startRadioPicker() },
-                                        onDismissProjection = closeProjection,
-                                        projectionContent = projectionPackage?.let { pkg ->
-                                            @Composable { key(pkg) {
-                                                win.solobot.omodash.projection.ProjectionWidget(pkg, closeProjection)
-                                            } }
-                                        }
-                                    )
+                            val mainPane: @Composable (Modifier) -> Unit = { paneModifier ->
+                                // ── Main content pane ─────────────────────────────
+                                AnimatedContent(
+                                    targetState   = nav,
+                                    transitionSpec = {
+                                        fadeIn() + slideInHorizontally { it / 10 } togetherWith
+                                        fadeOut() + slideOutHorizontally { -it / 10 }
+                                    },
+                                    modifier = paneModifier,
+                                    label    = "pane_transition"
+                                ) { destination ->
+                                    when (destination) {
+                                        NavDestination.HOME -> HomeScreen(
+                                            settings            = settings,
+                                            weather             = weather,
+                                            weatherMessage = when {
+                                                weatherError != null -> "Weather unavailable"
+                                                location == null -> "Waiting for location"
+                                                weatherLoading -> "Loading weather…"
+                                                else -> "Weather unavailable"
+                                            },
+                                            onRetryWeather = vm::retryWeather,
+                                            nowPlaying          = nowPlaying,
+                                            location            = location,
+                                            bearing             = bearing,
+                                            isWifi              = isWifi,
+                                            isData              = isData,
+                                            isDayMode           = isDayMode,
+                                            onPlayPause         = vm::playPause,
+                                            onSeekTo            = vm::seekTo,
+                                            onNext              = vm::skipNext,
+                                            onPrev              = vm::skipPrev,
+                                            onLaunchCarPlay     = { vm.launchVehicleApp(win.solobot.omodash.data.VehicleApp.CARPLAY) },
+                                            onLaunchAndroidAuto = { vm.launchVehicleApp(win.solobot.omodash.data.VehicleApp.ANDROID_AUTO) },
+                                            onTapNowPlaying = {
+                                                if (nowPlaying?.oemSource != null) {
+                                                    vm.openCurrentMediaApp()
+                                                } else {
+                                                    val pkg = nowPlaying?.controller?.packageName
+                                                    if (pkg == settings.androidAutoPackage) openProjection(pkg)
+                                                    else vm.openCurrentMediaApp()
+                                                }
+                                            },
+                                            onUpdateWidget      = { id, sx, sy -> vm.updateWidgetConfig(id, sx, sy) },
+                                            onMoveWidget        = { id, gx, gy -> vm.moveWidgetConfig(id, gx, gy) },
+                                            onAddWidget         = { id -> vm.addWidget(id) },
+                                            onRemoveWidget      = { id -> vm.removeWidget(id) },
+                                            onSetClockStyle     = { style -> vm.updateSettings { copy(clockStyle = style) } },
+                                            onSetVitalsAsBars   = { asBars -> vm.updateSettings { copy(vitalsAsBars = asBars) } },
+                                            onSetSpeedometerDigitalOnly = { digital -> vm.updateSettings { copy(speedometerDigitalOnly = digital) } },
+                                            onUpdateSoundPad    = { idx, pad -> vm.updateSoundboardPad(idx, pad) },
+                                            hardwareRadio         = hardwareRadio,
+                                            onLaunchHardwareRadio = { vm.launchHardwareRadioApp() },
+                                            onStartHardwareRadio = vm::startHardwareRadioPlayback,
+                                            onStopHardwareRadio   = { vm.stopHardwareRadioApp() },
+                                            onRadioSeekUp         = { vm.radioSeekUp() },
+                                            onRadioSeekDown       = { vm.radioSeekDown() },
+                                            onRadioCycleFm        = { vm.radioCycleFm() },
+                                            onRadioSwitchAm       = { vm.radioSwitchAm() },
+                                            onRadioTune           = { band, freq -> vm.radioTune(band, freq) },
+                                            onAssignRadio         = { vm.startRadioPicker() },
+                                            onDismissProjection = closeProjection,
+                                            projectionContent = projectionPackage?.let { pkg ->
+                                                @Composable { key(pkg) {
+                                                    win.solobot.omodash.projection.ProjectionWidget(pkg, closeProjection)
+                                                } }
+                                            }
+                                        )
 
-                                    NavDestination.APP_LIBRARY -> AppLibraryScreen(
-                                        apps                = apps,
-                                        isLoading           = appsLoading,
-                                        isPickerMode        = pickerSlot != null,
-                                        pickerSlot          = pickerSlot,
-                                        isCarPlayPickerMode = appPickerTarget != null,
-                                        carPlayPickerLabel  = when (appPickerTarget) {
-                                            win.solobot.omodash.viewmodel.LauncherViewModel.AppPickerTarget.ANDROID_AUTO -> "CHOOSE ANDROID AUTO APP"
-                                            win.solobot.omodash.viewmodel.LauncherViewModel.AppPickerTarget.RADIO        -> "CHOOSE RADIO APP"
-                                            else -> "CHOOSE CARPLAY APP"
-                                        },
-                                        accent              = accent,
-                                        onAppClick          = { app -> vm.launchApp(app.packageName) },
-                                        onPickerSelect      = { slot, app -> vm.assignShortcut(slot, app) },
-                                        onCarPlaySelect     = { app -> vm.assignPickerApp(app) },
-                                        currentRadioSource = if (appPickerTarget == win.solobot.omodash.viewmodel.LauncherViewModel.AppPickerTarget.RADIO)
-                                            nowPlaying?.controller?.packageName?.let { pkg ->
-                                                val label = apps.firstOrNull { it.packageName == pkg }?.appName ?: pkg
-                                                "$label · ${nowPlaying?.title.orEmpty()}"
-                                            } else null,
-                                        onUseCurrentRadioSource = { vm.assignCurrentMediaAsRadio() }
-                                    )
+                                        NavDestination.APP_LIBRARY -> AppLibraryScreen(
+                                            apps                = apps,
+                                            isLoading           = appsLoading,
+                                            isPickerMode        = pickerSlot != null,
+                                            pickerSlot          = pickerSlot,
+                                            isCarPlayPickerMode = appPickerTarget != null,
+                                            carPlayPickerLabel  = when (appPickerTarget) {
+                                                win.solobot.omodash.viewmodel.LauncherViewModel.AppPickerTarget.ANDROID_AUTO -> "CHOOSE ANDROID AUTO APP"
+                                                win.solobot.omodash.viewmodel.LauncherViewModel.AppPickerTarget.RADIO        -> "CHOOSE RADIO APP"
+                                                win.solobot.omodash.viewmodel.LauncherViewModel.AppPickerTarget.NAVIGATION -> "CHOOSE NAVIGATION APP"
+                                                win.solobot.omodash.viewmodel.LauncherViewModel.AppPickerTarget.CAR_SETTINGS -> "CHOOSE CAR SETTINGS APP"
+                                                win.solobot.omodash.viewmodel.LauncherViewModel.AppPickerTarget.LOCAL_SETTINGS -> "CHOOSE LOCAL SETTINGS APP"
+                                                else -> "CHOOSE CARPLAY APP"
+                                            },
+                                            accent              = accent,
+                                            onAppClick          = { app -> vm.launchApp(app.packageName) },
+                                            onPickerSelect      = { slot, app -> vm.assignShortcut(slot, app) },
+                                            onCarPlaySelect     = { app -> vm.assignPickerApp(app) },
+                                            currentRadioSource = if (appPickerTarget == win.solobot.omodash.viewmodel.LauncherViewModel.AppPickerTarget.RADIO)
+                                                nowPlaying?.controller?.packageName?.let { pkg ->
+                                                    val label = apps.firstOrNull { it.packageName == pkg }?.appName ?: pkg
+                                                    "$label · ${nowPlaying?.title.orEmpty()}"
+                                                } else null,
+                                            onUseCurrentRadioSource = { vm.assignCurrentMediaAsRadio() }
+                                        )
 
-                                    NavDestination.SETTINGS -> SettingsScreen(
-                                        settings = settings,
-                                        accent   = accent,
-                                        onUpdate = { block -> vm.updateSettings(block) },
-                                        onReset  = { vm.resetSettings() },
-                                        onAssignCarPlay = { vm.startCarPlayPicker() },
-                                        onAssignAndroidAuto = { vm.startAndroidAutoPicker() },
-                                        focusUpdates = restoreUpdates,
-                                        onUpdatesFocused = { restoreUpdates = false }
-                                    )
+                                        NavDestination.SETTINGS -> SettingsScreen(
+                                            settings = settings,
+                                            accent   = accent,
+                                            onUpdate = { block -> vm.updateSettings(block) },
+                                            onReset  = { vm.resetSettings() },
+                                            onAssignCarPlay = { vm.startCarPlayPicker() },
+                                            onAssignAndroidAuto = { vm.startAndroidAutoPicker() },
+                                            onAssignVehicleApp = vm::startVehicleAppPicker,
+                                            focusUpdates = restoreUpdates,
+                                            onUpdatesFocused = { restoreUpdates = false }
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            val vDivider: @Composable () -> Unit = {
-                                androidx.compose.material3.VerticalDivider(
-                                    modifier = Modifier.fillMaxHeight(),
-                                    color    = layoutDivColor
-                                )
-                            }
-                            if (settings.sidebarPosition == SidebarPosition.LEFT) {
-                                sidebarContent()
-                                vDivider()
-                            }
-                            mainPane(Modifier.weight(1f).fillMaxHeight())
-                            if (settings.sidebarPosition == SidebarPosition.RIGHT) {
-                                vDivider()
-                                sidebarContent()
+                            Column(Modifier.fillMaxSize()) {
+                                Row(Modifier.weight(1f).fillMaxWidth()) {
+                                    if (settings.sidebarPosition == SidebarPosition.LEFT) sidebarContent()
+                                    mainPane(Modifier.weight(1f).fillMaxHeight())
+                                    if (settings.sidebarPosition == SidebarPosition.RIGHT) sidebarContent()
+                                }
+                                ClimateBar(climate, vm::onClimateAction)
                             }
                         }
                     }
+                } // ProvidePanelDimensions
                 }
-            }
             } // CompositionLocalProvider
         }
     }

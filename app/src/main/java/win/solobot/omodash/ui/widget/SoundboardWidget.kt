@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AudioFile
-import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.rounded.AudioFile
+import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -267,7 +267,7 @@ private fun PadAssignDialog(
                         border = androidx.compose.foundation.BorderStroke(1.dp, if (audioUri.isNotEmpty()) accent else fieldBorder),
                         contentPadding = PaddingValues(horizontal = 8.dp)
                     ) {
-                        Icon(Icons.Default.AudioFile, null, tint = accent, modifier = Modifier.size(12.dp))
+                        Icon(Icons.Rounded.AudioFile, null, tint = accent, modifier = Modifier.size(12.dp))
                         Spacer(Modifier.width(4.dp))
                         Text(
                             if (audioUri.isNotEmpty()) "CUSTOM FILE ASSIGNED" else "PICK AUDIO FILE",
@@ -282,7 +282,7 @@ private fun PadAssignDialog(
                             onClick = { audioUri = "" },
                             modifier = Modifier.size(28.dp)
                         ) {
-                            Icon(Icons.Default.Clear, null, tint = dimColor, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Rounded.Clear, null, tint = dimColor, modifier = Modifier.size(14.dp))
                         }
                     }
                 }

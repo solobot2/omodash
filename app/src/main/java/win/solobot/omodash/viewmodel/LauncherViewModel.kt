@@ -13,6 +13,9 @@ import android.provider.Settings as AndroidSettings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import win.solobot.omodash.data.AppSettings
+import win.solobot.omodash.data.ClimateRepository
+import win.solobot.omodash.model.ClimateAction
+import win.solobot.omodash.model.ClimateState
 import win.solobot.omodash.data.DayNightMode
 import win.solobot.omodash.data.DefaultShortcutIcon
 import win.solobot.omodash.data.SettingsRepository
@@ -25,7 +28,7 @@ import win.solobot.omodash.data.withResizedWidget
 import win.solobot.omodash.data.withAddedWidget
 import win.solobot.omodash.data.withWidgetEnabled
 import win.solobot.omodash.data.defaultShortcuts
-import win.solobot.omodash.util.SunriseSunset
+import win.solobot.omodash.data.vehicleBinding
 import win.solobot.omodash.model.AppInfo
 import win.solobot.omodash.model.NavDestination
 import win.solobot.omodash.model.NowPlayingState
@@ -41,7 +44,15 @@ import kotlinx.coroutines.flow.*
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
     private val settingsRepo = SettingsRepository(application)
+    private val climateRepo = ClimateRepository(application)
     private val locationMgr  = LocationCompassManager(application)
+
+    val climate: StateFlow<ClimateState> = climateRepo.state
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ClimateState())
+
+    fun onClimateAction(action: ClimateAction) {
+        viewModelScope.launch { climateRepo.dispatch(action) }
+    }
 
     // ── Settings ──────────────────────────────────────────────────────────────
     private val _settingsLoaded = MutableStateFlow(false)
@@ -119,7 +130,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     // ── CarPlay / Android Auto picker ─────────────────────────────────────────
-    enum class AppPickerTarget { CARPLAY, ANDROID_AUTO, RADIO }
+    enum class AppPickerTarget { CARPLAY, ANDROID_AUTO, RADIO, NAVIGATION, CAR_SETTINGS, LOCAL_SETTINGS }
 
     private val _appPickerTarget = MutableStateFlow<AppPickerTarget?>(null)
     val appPickerTarget: StateFlow<AppPickerTarget?> = _appPickerTarget
@@ -144,10 +155,35 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             AppPickerTarget.CARPLAY      -> updateSettings { copy(carPlayPackage = app.packageName) }
             AppPickerTarget.ANDROID_AUTO -> updateSettings { copy(androidAutoPackage = app.packageName) }
             AppPickerTarget.RADIO        -> updateSettings { copy(radioPackage = app.packageName) }
+            AppPickerTarget.NAVIGATION, AppPickerTarget.CAR_SETTINGS, AppPickerTarget.LOCAL_SETTINGS -> {
+                val target = win.solobot.omodash.data.VehicleApp.valueOf(_appPickerTarget.value!!.name)
+                updateSettings { copy(vehicleAppPackages = vehicleAppPackages + (target to app.packageName)) }
+            }
             null -> {}
         }
         _appPickerTarget.value = null
         _nav.value = NavDestination.HOME
+    }
+
+    fun startVehicleAppPicker(app: win.solobot.omodash.data.VehicleApp) {
+        _appPickerTarget.value = AppPickerTarget.valueOf(app.name)
+        _nav.value = NavDestination.APP_LIBRARY
+    }
+
+    fun launchVehicleApp(app: win.solobot.omodash.data.VehicleApp) {
+        val binding = settings.value.vehicleBinding(app)
+        if (binding.launch == win.solobot.omodash.data.VehicleLaunch.CURRENT_MEDIA) {
+            openCurrentMediaApp()
+            return
+        }
+        val context = getApplication<Application>()
+        runCatching {
+            val intent = checkNotNull(win.solobot.omodash.util.AppLaunchIntent.resolveBinding(context, binding)) { "App is not available" }
+            context.startActivity(intent)
+        }.onFailure {
+            win.solobot.omodash.diagnostics.DiagnosticLog.event("Launch", "Cannot open preset app $app", it)
+            android.widget.Toast.makeText(context, "${app.name.replace('_', ' ')} is not available", android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     fun clearRadioApp()        { updateSettings { copy(radioPackage = "") } }
@@ -253,9 +289,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     // ── Now Playing ───────────────────────────────────────────────────────────
-    val nowPlaying: StateFlow<NowPlayingState?> = MediaListenerService.nowPlaying
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
     private fun openSessionScreen(controller: android.media.session.MediaController?): Boolean {
         val pending = controller?.sessionActivity ?: return false
         return runCatching {
@@ -269,12 +302,34 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun openCurrentMediaApp() {
-        val controller = nowPlaying.value?.controller
-        if (controller == null) { launchFactoryAudio(radio = false); return }
+        val media = nowPlaying.value
+        if (media?.oemSource != null && media.oemSource > 0) {
+            val view = settings.value.vehicleBinding(win.solobot.omodash.data.VehicleApp.NOW_PLAYING).mediaView
+            viewModelScope.launch(Dispatchers.IO) { desayRadio.openAudioSource(media.oemSource, view, useCurrentSource = true) }
+            return
+        }
+        val controller = media?.controller
+        if (controller == null) {
+            if (media?.packageName != null) launchApp(media.packageName!!)
+            else launchFactoryAudio(radio = false)
+            return
+        }
         if (!openSessionScreen(controller)) launchApp(controller.packageName)
     }
 
-    fun playPause() { nowPlaying.value?.controller?.also { ctrl ->
+    fun playPause() {
+        val media = nowPlaying.value
+        if (media?.oemSource != null) {
+            val action = when (media.playbackAction) {
+                win.solobot.omodash.model.PlaybackAction.PLAY -> 1
+                win.solobot.omodash.model.PlaybackAction.PAUSE -> 2
+                win.solobot.omodash.model.PlaybackAction.STOP -> 3
+                else -> return
+            }
+            viewModelScope.launch(Dispatchers.IO) { desayRadio.mediaCommand(media.oemSource, action) }
+            return
+        }
+        nowPlaying.value?.controller?.also { ctrl ->
         val state = ctrl.playbackState
         // Radio sources often support Stop but not Pause. Use the live session
         // capabilities so the visible control can actually silence the source.
@@ -311,8 +366,22 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             .onFailure { win.solobot.omodash.diagnostics.DiagnosticLog.event("MediaCommand", "Skip command failed", it) }
     }
 
-    fun skipNext() { skip(nowPlaying.value?.controller, true) }
-    fun skipPrev() { skip(nowPlaying.value?.controller, false) }
+    private fun skipCurrent(next: Boolean) {
+        val media = nowPlaying.value
+        if (media?.oemSource != null) viewModelScope.launch(Dispatchers.IO) { desayRadio.mediaCommand(media.oemSource, if (next) 5 else 4) }
+        else skip(media?.controller, next)
+    }
+    fun skipNext() = skipCurrent(true)
+    fun skipPrev() = skipCurrent(false)
+
+    fun seekTo(positionMs: Long) {
+        val media = nowPlaying.value ?: return
+        if (media.actions and android.media.session.PlaybackState.ACTION_SEEK_TO == 0L) return
+        val target = positionMs.coerceIn(0L, media.durationMs.coerceAtLeast(0L))
+        if (media.oemSource != null) viewModelScope.launch(Dispatchers.IO) { desayRadio.mediaCommand(media.oemSource, 9, target) }
+        else runCatching { media.controller?.transportControls?.seekTo(target) }
+            .onFailure { win.solobot.omodash.diagnostics.DiagnosticLog.event("MediaCommand", "Seek failed", it) }
+    }
 
     // ── Weather ───────────────────────────────────────────────────────────────
     private val _weather = MutableStateFlow<WeatherState?>(null)
@@ -320,18 +389,22 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     private val _weatherError = MutableStateFlow<String?>(null)
     val weatherError: StateFlow<String?> = _weatherError
+    private val _weatherLoading = MutableStateFlow(false)
+    val weatherLoading: StateFlow<Boolean> = _weatherLoading
 
     private var weatherJob: Job? = null
 
     fun fetchWeather(lat: Double, lon: Double, metric: Boolean) {
         weatherJob?.cancel()
         weatherJob = viewModelScope.launch {
+            _weatherLoading.value = true
+            _weatherError.value = null
             try {
                 // Always request celsius — the state stores celsius and the widget
                 // converts for display, so requesting fahrenheit just round-tripped
                 // the value through two lossy conversions
                 val resp = WeatherApi.service.getForecast(lat, lon, temperatureUnit = "celsius")
-                resp.currentWeather?.let { cw ->
+                checkNotNull(resp.currentWeather) { "Weather response has no current conditions" }.let { cw ->
                     _weather.value = WeatherState(
                         temperatureCelsius = cw.temperature,
                         weatherCode       = cw.weathercode,
@@ -340,10 +413,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     )
                 }
                 _weatherError.value = null
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _weatherError.value = e.message
+                win.solobot.omodash.diagnostics.DiagnosticLog.event("Weather", "Weather request failed", e)
+            } finally {
+                if (currentCoroutineContext().isActive) _weatherLoading.value = false
             }
         }
+    }
+
+    fun retryWeather() {
+        val loc = locationMgr.location.value
+        if (loc == null) startLocationUpdates()
+        else fetchWeather(loc.latitude, loc.longitude, settings.value.unitSystem.name == "METRIC")
     }
 
     // ── Location & Compass ────────────────────────────────────────────────────
@@ -356,15 +440,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     // Re-evaluated every minute: a parked car produces no location updates
     // (minDistance filters), so AUTO mode must also flip on time alone.
     private val minuteTicker = flow { while (true) { emit(Unit); delay(60_000L) } }
-
-    val isDayMode: StateFlow<Boolean> = combine(settings, locationMgr.location, minuteTicker) { s, loc, _ ->
-        when (s.dayNightMode) {
-            DayNightMode.DARK   -> false
-            DayNightMode.LIGHT  -> true
-            DayNightMode.AUTO   -> if (loc != null) SunriseSunset.isDay(loc.latitude, loc.longitude) else false
-            DayNightMode.SYSTEM -> false // placeholder — overridden in MainActivity via isSystemInDarkTheme()
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     fun startLocationUpdates() = locationMgr.start()
     fun stopLocationUpdates()  = locationMgr.stop()
@@ -454,57 +529,57 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     // ── MediaSession radio backend ───────────────────────────────────────────
 
-    private fun looksLikeRadioPackage(pkg: String): Boolean {
-        val p = pkg.lowercase()
-        return "radio" in p || "fmradio" in p || "tuner" in p || p.endsWith(".fm") || ".fm." in p
-    }
-
-    private fun isRadioSessionPackage(pkg: String): Boolean {
-        val assigned = settings.value.radioPackage
-        val preset = win.solobot.omodash.data.VehiclePresets.find(settings.value.vehiclePresetId)
-        return pkg in preset.radioSessionPackages || if (assigned.isNotEmpty()) pkg == assigned else looksLikeRadioPackage(pkg)
-    }
-
-    private fun parseSessionRadio(np: NowPlayingState): HardwareRadioState? {
-        val pkg = np.controller?.packageName ?: return null
-        if (!isRadioSessionPackage(pkg)) return null
-        val metadata = win.solobot.omodash.model.radioMetadata(np.title, np.artist)
-        if (pkg == win.solobot.omodash.data.VehiclePresets.current().binding(win.solobot.omodash.data.VehicleApp.RADIO).packageName && metadata.frequency == null) return null
-        return HardwareRadioState(band = metadata.band, freq = metadata.frequency.orEmpty(), stationName = metadata.station,
-            isPlaying = np.isPlaying,
-            canSeekUp = (np.actions and android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT) != 0L,
-            canSeekDown = (np.actions and android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS) != 0L,
-            canStop = (np.actions and (android.media.session.PlaybackState.ACTION_STOP or android.media.session.PlaybackState.ACTION_PAUSE or android.media.session.PlaybackState.ACTION_PLAY_PAUSE)) != 0L)
-    }
+    private fun isRadioSessionPackage(pkg: String): Boolean =
+        settings.value.radioPackage.isNotBlank() && pkg == settings.value.radioPackage
 
     private val desayRadio = win.solobot.omodash.service.DesayRadio(application)
-    private val desayRadioState = flow {
+    private val desayMediaState = flow {
         try {
             while (currentCoroutineContext().isActive) {
-                val radioBinding = win.solobot.omodash.data.VehiclePresets.current().binding(win.solobot.omodash.data.VehicleApp.RADIO)
-                emit(if (radioBinding.launch == win.solobot.omodash.data.VehicleLaunch.DESAY_RADIO) desayRadio.read()
+                val binding = win.solobot.omodash.data.VehiclePresets.current().binding(win.solobot.omodash.data.VehicleApp.RADIO)
+                emit(if (binding.launch == win.solobot.omodash.data.VehicleLaunch.DESAY_RADIO) desayRadio.readMedia()
                     else { desayRadio.close(); null })
-                delay(1_500)
+                delay(1_000)
             }
         } finally { desayRadio.close() }
     }.flowOn(Dispatchers.IO)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    val nowPlaying: StateFlow<NowPlayingState?> =
+        combine(MediaListenerService.nowPlaying, desayMediaState, settings) { session, native, configuration ->
+            val binding = win.solobot.omodash.data.VehiclePresets.find(configuration.vehiclePresetId).binding(win.solobot.omodash.data.VehicleApp.RADIO)
+            if (binding.launch != win.solobot.omodash.data.VehicleLaunch.DESAY_RADIO) session
+            else if (native == null) NowPlayingState("Waiting for media source", "", null, isPlaying = false, controller = null)
+            else {
+                val track = native.track
+                // Only the explicitly selected source may supplement OEM data.
+                // An inactive Android Auto session can be absent from getActiveSessions.
+                val matching = session?.takeIf { it.packageName == track.packageName && it.title == track.title &&
+                    (track.artist.isBlank() || it.artist == track.artist) }
+                track.copy(controller = matching?.controller,
+                    albumArt = track.albumArt ?: matching?.albumArt,
+                    artUri = track.artUri ?: matching?.artUri,
+                    durationMs = track.durationMs.takeIf { it > 0 } ?: matching?.durationMs ?: 0L)
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     private fun desayCommand(action: Int) {
         viewModelScope.launch(Dispatchers.IO) { desayRadio.command(action) }
     }
 
-    // MCU backend wins when present; otherwise mirror the radio app's session
     val hardwareRadio: StateFlow<HardwareRadioState?> =
-        combine(_mcuRadio, desayRadioState, nowPlaying, settings) { mcu, desay, np, _ ->
-            mcu ?: desay?.let { native ->
-                native.copy(stationName = native.stationName ?: np?.let { parseSessionRadio(it)?.stationName })
-            } ?: np?.let { parseSessionRadio(it) }
+        combine(_mcuRadio, desayMediaState, MediaListenerService.nowPlaying, settings) { mcu, native, session, configuration ->
+            val binding = win.solobot.omodash.data.VehiclePresets.find(configuration.vehiclePresetId).binding(win.solobot.omodash.data.VehicleApp.RADIO)
+            mcu ?: if (binding.launch == win.solobot.omodash.data.VehicleLaunch.DESAY_RADIO) native?.radio
+            else session?.takeIf { it.packageName == configuration.radioPackage && configuration.radioPackage.isNotBlank() }?.let {
+                HardwareRadioState("RADIO", "", stationName = it.title, isPlaying = it.isPlaying,
+                    canSeekUp = it.actions and android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT != 0L,
+                    canSeekDown = it.actions and android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS != 0L,
+                    canStop = it.playbackAction != win.solobot.omodash.model.PlaybackAction.DISABLED)
+            }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private fun radioSessionController() = nowPlaying.value?.controller?.takeIf { c ->
-        c.packageName?.let { isRadioSessionPackage(it) } == true
-    }
+    private fun radioSessionController() = nowPlaying.value?.controller?.takeIf { isRadioSessionPackage(it.packageName) }
 
     // Send a radio keyCode to the MCU via the EventService broadcast channel.
     // Permission com.szchoiceway.permission.broadcast (prot=normal) is required and declared.
@@ -659,7 +734,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 minuteTicker.mapNotNull { locationMgr.location.value }
             ).collect { loc ->
                 val now = System.currentTimeMillis()
-                if (now - lastFetchMs >= 30 * 60 * 1_000L) {
+                val refreshPeriod = if (_weatherError.value != null) 60_000L else 30 * 60 * 1_000L
+                if (settings.value.showWeather && now - lastFetchMs >= refreshPeriod) {
                     lastFetchMs = now
                     fetchWeather(loc.latitude, loc.longitude, settings.value.unitSystem.name == "METRIC")
                 }

@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,7 +34,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 import win.solobot.omodash.data.AppSettings
@@ -50,11 +49,14 @@ import win.solobot.omodash.data.withAddedWidget
 import win.solobot.omodash.model.NowPlayingState
 import win.solobot.omodash.model.WeatherState
 import win.solobot.omodash.ui.theme.LocalDayMode
+import win.solobot.omodash.ui.theme.LocalDashboardPalette
+import win.solobot.omodash.ui.components.dashboardSurface
+import win.solobot.omodash.ui.components.RoundedSymbol
 import win.solobot.omodash.ui.widget.*
 import java.util.Calendar
 import win.solobot.omodash.util.LocationData
 
-private val WIDGET_RADIUS = RoundedCornerShape(0.dp)
+private val WIDGET_RADIUS = RoundedCornerShape(14.dp)
 
 private data class WidgetTypeInfo(
     val id: String,
@@ -64,15 +66,15 @@ private data class WidgetTypeInfo(
 )
 
 private val ALL_WIDGET_TYPES = listOf(
-    WidgetTypeInfo("CLOCK",       "CLOCK",       Icons.Default.AccessTime,  "Time & date"),
-    WidgetTypeInfo("WEATHER",     "WEATHER",     Icons.Default.Cloud,       "Current conditions"),
-    WidgetTypeInfo("NOW_PLAYING", "NOW PLAYING", Icons.Default.MusicNote,   "Media controls"),
-    WidgetTypeInfo("TELEMETRY",   "COMPASS",     Icons.Default.Explore,     "Speed & heading"),
-    WidgetTypeInfo("ALTIMETER",   "ALTIMETER",   Icons.Default.FlightTakeoff, "Roll, pitch & altitude"),
-    WidgetTypeInfo("SPEEDOMETER", "SPEED",       Icons.Default.Speed,         "GPS speed"),
-    WidgetTypeInfo("VITALS",      "VITALS",      Icons.Default.Dns,           "Head Unit Health / Vitals"),
-    WidgetTypeInfo("TRIP_TRACKER", "TRIP TRACKER", Icons.Default.Map,          "Trip logs & stats"),
-    WidgetTypeInfo("SOUNDBOARD",  "SOUNDBOARD",  Icons.Default.Piano,         "Custom sound pads")
+    WidgetTypeInfo("CLOCK",       "CLOCK",       Icons.Rounded.AccessTime,  "Time & date"),
+    WidgetTypeInfo("WEATHER",     "WEATHER",     Icons.Rounded.Cloud,       "Current conditions"),
+    WidgetTypeInfo("NOW_PLAYING", "NOW PLAYING", Icons.Rounded.MusicNote,   "Media controls"),
+    WidgetTypeInfo("TELEMETRY",   "COMPASS",     Icons.Rounded.Explore,     "Speed & heading"),
+    WidgetTypeInfo("ALTIMETER",   "ALTIMETER",   Icons.Rounded.FlightTakeoff, "Roll, pitch & altitude"),
+    WidgetTypeInfo("SPEEDOMETER", "SPEED",       Icons.Rounded.Speed,         "GPS speed"),
+    WidgetTypeInfo("VITALS",      "VITALS",      Icons.Rounded.Dns,           "Head Unit Health / Vitals"),
+    WidgetTypeInfo("TRIP_TRACKER", "TRIP TRACKER", Icons.Rounded.Map,          "Trip logs & stats"),
+    WidgetTypeInfo("SOUNDBOARD",  "SOUNDBOARD",  Icons.Rounded.Piano,         "Custom sound pads")
 )
 
 @SuppressLint("UnusedBoxWithConstraintsScope")
@@ -112,27 +114,21 @@ fun HomeScreen(
     onAssignRadio: () -> Unit = {},
     projectionContent: (@Composable () -> Unit)? = null,
     onDismissProjection: () -> Unit = {},
+    weatherMessage: String = "Waiting for weather data",
+    onRetryWeather: () -> Unit = {},
+    onSeekTo: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val accent       = Color(settings.accentColor)
-    val gap          = 6.dp
-    val hasWallpaper = settings.wallpaperUri.isNotEmpty()
-    val widgetBg     = when {
-        isDayMode    -> Color(0xFFFFFFFF)
-        hasWallpaper -> Color(0xCC000000)
-        else         -> Color.Black.copy(alpha = 0.35f)
-    }
-    val widgetBorder = when {
-        isDayMode    -> Color(0xFFCCCCCC)
-        hasWallpaper -> Color(0x22FFFFFF)
-        else         -> MaterialTheme.colorScheme.onBackground.copy(alpha = 0.08f)
-    }
-    val headerTextColor   = if (isDayMode) Color(0xFF111111) else accent
-    val statusIconColor   = if (isDayMode) Color(0xFF444444) else Color(0xFF666666)
-    val controlIconColor  = if (isDayMode) Color(0xFF666666) else Color(0xFF444444)
+    val palette = LocalDashboardPalette.current
+    val accent = palette.navAccent
+    val gap = 12.dp
+    val headerTextColor = palette.text
+    val statusIconColor = palette.muted
+    val controlIconColor = palette.muted
 
     var resizingId    by remember { mutableStateOf<String?>(null) }
     var contextMenuId by remember { mutableStateOf<String?>(null) }
+    var selectedMediaSource by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("Automatic") }
 
     val configuration    = LocalConfiguration.current
     val isLandscape      = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -158,15 +154,15 @@ fun HomeScreen(
             )
             Spacer(Modifier.weight(1f))
             AnimatedVisibility(visible = isWifi, enter = fadeIn(), exit = fadeOut()) {
-                Icon(Icons.Default.Wifi, "WiFi", tint = statusIconColor, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.Wifi, "WiFi", tint = statusIconColor, modifier = Modifier.size(16.dp))
             }
             if (isWifi) Spacer(Modifier.width(6.dp))
             AnimatedVisibility(visible = isData, enter = fadeIn(), exit = fadeOut()) {
-                Icon(Icons.Default.SignalCellularAlt, "Data", tint = statusIconColor, modifier = Modifier.size(16.dp))
+                Icon(Icons.Rounded.SignalCellularAlt, "Data", tint = statusIconColor, modifier = Modifier.size(16.dp))
             }
             if (projectionContent != null) {
                 IconButton(onClick = onDismissProjection, modifier = Modifier.size(44.dp)) {
-                    Icon(Icons.Default.Close, "Close projection", tint = headerTextColor, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Rounded.Close, "Close projection", tint = headerTextColor, modifier = Modifier.size(20.dp))
                 }
             }
             if (isLandscape) {
@@ -177,7 +173,7 @@ fun HomeScreen(
                         modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
-                            imageVector        = Icons.Default.Dashboard,
+                            imageVector        = Icons.Rounded.Dashboard,
                             contentDescription = "Widget library",
                             tint               = controlIconColor,
                             modifier           = Modifier.size(15.dp)
@@ -190,7 +186,7 @@ fun HomeScreen(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
-                        imageVector        = Icons.Default.Edit,
+                        imageVector        = Icons.Rounded.Edit,
                         contentDescription = "Edit widgets",
                         tint               = if (editMode) accent else controlIconColor,
                         modifier           = Modifier.size(15.dp)
@@ -216,7 +212,7 @@ fun HomeScreen(
             // WEATHER stays in the set even with no data: the commit path
             // (LauncherViewModel.moveWidgetConfig) computes against settings flags
             // only, so dropping it here would make the drop ghost and the committed
-            // layout disagree. With no data the cell renders fully transparent.
+            // layout disagree. Weather keeps its card and displays its loading/error state.
             val visibleIds = buildSet {
                 if (settings.showClock) add("CLOCK")
                 if (settings.showWeather) add("WEATHER")
@@ -311,9 +307,6 @@ fun HomeScreen(
                 // Original (pre-auto-expand) spanX needed for drag boundary clamping
                 val origSpanX  = visible.find { it.id == w.id }?.spanX ?: 1
                 val isDragging = draggingId == w.id
-                // Weather with no data reserves its cell but draws nothing
-                // (still visible in edit mode so it can be moved/removed)
-                val isGhost    = w.id == "WEATHER" && weather == null && !editMode
                 val dragDpX    = if (isDragging) with(density) { dragOffsetPx.x.toDp() } else 0.dp
                 val dragDpY    = if (isDragging) with(density) { dragOffsetPx.y.toDp() } else 0.dp
 
@@ -323,17 +316,7 @@ fun HomeScreen(
                         .absoluteOffset(x = xOff + dragDpX, y = yOff + dragDpY)
                         .size(width, height)
                         .zIndex(if (isDragging) 1f else 0f)
-                        .clip(WIDGET_RADIUS)
-                        .background(if (isGhost) Color.Transparent else widgetBg)
-                        .border(
-                            width = if (editMode) 1.5.dp else 1.dp,
-                            color = when {
-                                editMode -> accent.copy(alpha = 0.45f)
-                                isGhost  -> Color.Transparent
-                                else     -> widgetBorder
-                            },
-                            shape = WIDGET_RADIUS
-                        )
+                        .dashboardSurface(highlighted = editMode)
                         .combinedClickable(
                             indication        = null,
                             interactionSource = remember { MutableInteractionSource() },
@@ -392,18 +375,18 @@ fun HomeScreen(
                             accent     = accent,
                             metric     = settings.unitSystem.name == "METRIC",
                             isDayMode  = isDayMode,
+                            message    = weatherMessage,
+                            onRetry    = onRetryWeather,
                             modifier   = Modifier.fillMaxSize()
                         )
                         "NOW_PLAYING" -> NowPlayingWidget(
                             state               = nowPlaying,
+                            selectedSource      = selectedMediaSource,
                             accent              = accent,
-                            carPlayPackage      = settings.carPlayPackage,
-                            androidAutoPackage  = settings.androidAutoPackage,
                             onPlayPause         = onPlayPause,
+                            onSeekTo            = onSeekTo,
                             onNext              = onNext,
                             onPrev              = onPrev,
-                            onLaunchCarPlay     = onLaunchCarPlay,
-                            onLaunchAndroidAuto = onLaunchAndroidAuto,
                             onOpenContextMenu   = { contextMenuId = w.id },
                             onTapToOpenApp      = onTapNowPlaying,
                             modifier            = Modifier.fillMaxSize(),
@@ -468,12 +451,17 @@ fun HomeScreen(
                         )
                     }
 
+                    if (w.id != "NOW_PLAYING") IconButton(
+                        onClick = { contextMenuId = w.id },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(40.dp)) {
+                        RoundedSymbol(win.solobot.omodash.R.drawable.symbol_more_vert, Modifier.size(23.dp),
+                            "$label menu", palette.muted)
+                    }
+
                     // Label — hide when album art fills the widget background
                     val labelColor = when {
-                        isGhost -> Color.Transparent
                         w.id == "NOW_PLAYING" && nowPlaying?.albumArt != null && nowPlaying.title.isNotEmpty() -> Color.Transparent
-                        isDayMode -> Color(0xFF999999)
-                        else      -> Color(0xFF3A3A3A)
+                        else -> palette.muted.copy(alpha = 0.65f)
                     }
                     Text(
                         text          = label,
@@ -487,44 +475,72 @@ fun HomeScreen(
                     )
                 }
             }
+            val selectedId = resizingId ?: contextMenuId
+            val selectedWidget = visible.firstOrNull { it.id == selectedId }
+            if (selectedWidget != null) {
+                val anchor = with(density) {
+                    val left = ((cellW + gap) * selectedWidget.gridX).roundToPx()
+                    val top = ((cellH + gap) * selectedWidget.gridY).roundToPx()
+                    androidx.compose.ui.unit.IntRect(left, top,
+                        left + (cellW * selectedWidget.spanX + gap * (selectedWidget.spanX - 1)).roundToPx(),
+                        top + (cellH * selectedWidget.spanY + gap * (selectedWidget.spanY - 1)).roundToPx())
+                }
+                win.solobot.omodash.ui.components.WidgetOverlay(anchor, { contextMenuId = null; resizingId = null }) {
+                    // ── Widget context menu (long-press any cell) ────────────────────────────
+                    contextMenuId?.let { id ->
+                        WidgetContextMenu(
+                            widgetId            = id,
+                            sizeRules           = settings.widgetSizeRules(id),
+                            accent              = accent,
+                            clockStyle          = settings.clockStyle,
+                            vitalsAsBars        = settings.vitalsAsBars,
+                            speedometerDigitalOnly = settings.speedometerDigitalOnly,
+                            isDayMode           = isDayMode,
+                            onResize            = { contextMenuId = null; resizingId = id },
+                            onSetClockStyle     = { onSetClockStyle(it) },
+                            onSetVitalsAsBars   = { onSetVitalsAsBars(it) },
+                            onSetSpeedometerDigitalOnly = { onSetSpeedometerDigitalOnly(it) },
+                            onDismiss           = { contextMenuId = null },
+                            mediaItems = {
+                                if (id == "NOW_PLAYING") {
+                                    listOf("Automatic", "All Media", "FM/AM Radio").forEach { source ->
+                                        ContextRow(source, if (source == "FM/AM Radio") Icons.Rounded.Radio else Icons.Rounded.MusicNote,
+                                            if (selectedMediaSource == source) accent else palette.muted,
+                                            { selectedMediaSource = source; contextMenuId = null }, isDayMode)
+                                    }
+                                    if (settings.carPlayPackage.isNotBlank()) ContextRow("Open CarPlay", Icons.Rounded.PhoneAndroid,
+                                        palette.text, { contextMenuId = null; onLaunchCarPlay() }, isDayMode)
+                                    if (settings.androidAutoPackage.isNotBlank()) ContextRow("Open Android Auto", Icons.Rounded.DirectionsCar,
+                                        palette.text, { contextMenuId = null; onLaunchAndroidAuto() }, isDayMode)
+                                    if (win.solobot.omodash.data.VehiclePresets.find(settings.vehiclePresetId).allowsAppAssignment)
+                                        ContextRow("Change radio app", Icons.Rounded.Radio, palette.text,
+                                            { contextMenuId = null; onAssignRadio() }, isDayMode)
+                                }
+                            }
+                        )
+                    }
+
+                    // ── Resize dialog ────────────────────────────────────────────────────────
+                    resizingId?.let { id ->
+                        val config = settings.widgetLayout.find { it.id == id }
+                        if (config != null) {
+                            WidgetResizeDialog(
+                                config    = config,
+                                settings  = settings,
+                                accent    = accent,
+                                isDayMode = isDayMode,
+                                onDismiss = { resizingId = null },
+                                onConfirm = { sx, sy ->
+                                    onUpdateWidget(id, sx, sy)
+                                    resizingId = null
+                                }
+                            )
+                        }
+                    }
+                }
+            }
             // Covers only the tile area: header and sidebar stay outside this container.
             if (!editMode && projectionContent != null) Box(Modifier.fillMaxSize().zIndex(10f)) { projectionContent() }
-        }
-    }
-
-    // ── Widget context menu (long-press any cell) ────────────────────────────
-    contextMenuId?.let { id ->
-        WidgetContextMenu(
-            widgetId            = id,
-            sizeRules           = settings.widgetSizeRules(id),
-            accent              = accent,
-            clockStyle          = settings.clockStyle,
-            vitalsAsBars        = settings.vitalsAsBars,
-            speedometerDigitalOnly = settings.speedometerDigitalOnly,
-            isDayMode           = isDayMode,
-            onResize            = { contextMenuId = null; resizingId = id },
-            onSetClockStyle     = { onSetClockStyle(it) },
-            onSetVitalsAsBars   = { onSetVitalsAsBars(it) },
-            onSetSpeedometerDigitalOnly = { onSetSpeedometerDigitalOnly(it) },
-            onDismiss           = { contextMenuId = null }
-        )
-    }
-
-    // ── Resize dialog ────────────────────────────────────────────────────────
-    resizingId?.let { id ->
-        val config = settings.widgetLayout.find { it.id == id }
-        if (config != null) {
-            WidgetResizeDialog(
-                config    = config,
-                settings  = settings,
-                accent    = accent,
-                isDayMode = isDayMode,
-                onDismiss = { resizingId = null },
-                onConfirm = { sx, sy ->
-                    onUpdateWidget(id, sx, sy)
-                    resizingId = null
-                }
-            )
         }
     }
 
@@ -554,23 +570,24 @@ internal fun WidgetContextMenu(
     onSetClockStyle: (ClockStyle) -> Unit,
     onSetVitalsAsBars: (Boolean) -> Unit,
     onSetSpeedometerDigitalOnly: (Boolean) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    mediaItems: @Composable ColumnScope.() -> Unit = {}
 ) {
     val menuBg    = if (isDayMode) Color(0xFFFFFFFF) else Color(0xFF111111)
     val menuBorder = if (isDayMode) Color(0xFFDDE1E5) else Color(0xFF1E1E1E)
     val menuDivider = if (isDayMode) Color(0xFFF1F3F5) else Color(0xFF1A1A1A)
-    Dialog(onDismissRequest = onDismiss) {
+    Box {
         Column(
             modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
-                .background(menuBg)
-                .border(1.dp, menuBorder, RoundedCornerShape(4.dp))
-                .padding(vertical = 4.dp)
-                .width(200.dp)
+                .width(260.dp)
+                .dashboardSurface()
+                .padding(vertical = 6.dp)
+                .verticalScroll(rememberScrollState())
         ) {
-            val inactiveMenuTint = if (isDayMode) Color(0xFF777777) else Color(0xFF555555)
+            val inactiveMenuTint = LocalDashboardPalette.current.muted
+            mediaItems()
             if (sizeRules.isResizable) {
-                ContextRow("RESIZE", Icons.Default.OpenWith, accent, onResize, isDayMode = isDayMode)
+                ContextRow("RESIZE", Icons.Rounded.OpenWith, accent, onResize, isDayMode = isDayMode)
             } else {
                 Text("FIXED SIZE ${sizeRules.sizes.single()}", color = inactiveMenuTint,
                     fontSize = 10.sp, modifier = Modifier.padding(16.dp))
@@ -579,7 +596,7 @@ internal fun WidgetContextMenu(
                 HorizontalDivider(color = menuDivider)
                 ContextRow(
                     label   = "DIGITAL",
-                    icon    = Icons.Default.Schedule,
+                    icon    = Icons.Rounded.Schedule,
                     tint    = if (clockStyle == ClockStyle.DIGITAL) accent else inactiveMenuTint,
                     onClick = { onSetClockStyle(ClockStyle.DIGITAL); onDismiss() },
                     isDayMode = isDayMode
@@ -587,7 +604,7 @@ internal fun WidgetContextMenu(
                 HorizontalDivider(color = menuDivider)
                 ContextRow(
                     label   = "ANALOG",
-                    icon    = Icons.Default.Watch,
+                    icon    = Icons.Rounded.Watch,
                     tint    = if (clockStyle == ClockStyle.ANALOG) accent else inactiveMenuTint,
                     onClick = { onSetClockStyle(ClockStyle.ANALOG); onDismiss() },
                     isDayMode = isDayMode
@@ -597,7 +614,7 @@ internal fun WidgetContextMenu(
                 HorizontalDivider(color = menuDivider)
                 ContextRow(
                     label   = "DIAL GAUGES",
-                    icon    = Icons.Default.Adjust,
+                    icon    = Icons.Rounded.Adjust,
                     tint    = if (!vitalsAsBars) accent else inactiveMenuTint,
                     onClick = { onSetVitalsAsBars(false); onDismiss() },
                     isDayMode = isDayMode
@@ -605,7 +622,7 @@ internal fun WidgetContextMenu(
                 HorizontalDivider(color = menuDivider)
                 ContextRow(
                     label   = "BARS VIEW",
-                    icon    = Icons.Default.FormatAlignLeft,
+                    icon    = Icons.Rounded.FormatAlignLeft,
                     tint    = if (vitalsAsBars) accent else inactiveMenuTint,
                     onClick = { onSetVitalsAsBars(true); onDismiss() },
                     isDayMode = isDayMode
@@ -615,7 +632,7 @@ internal fun WidgetContextMenu(
                 HorizontalDivider(color = menuDivider)
                 ContextRow(
                     label   = "DIAL TRACK",
-                    icon    = Icons.Default.Speed,
+                    icon    = Icons.Rounded.Speed,
                     tint    = if (!speedometerDigitalOnly) accent else inactiveMenuTint,
                     onClick = { onSetSpeedometerDigitalOnly(false); onDismiss() },
                     isDayMode = isDayMode
@@ -623,7 +640,7 @@ internal fun WidgetContextMenu(
                 HorizontalDivider(color = menuDivider)
                 ContextRow(
                     label   = "DIGITAL ONLY",
-                    icon    = Icons.Default.Dialpad,
+                    icon    = Icons.Rounded.Dialpad,
                     tint    = if (speedometerDigitalOnly) accent else inactiveMenuTint,
                     onClick = { onSetSpeedometerDigitalOnly(true); onDismiss() },
                     isDayMode = isDayMode
@@ -643,17 +660,7 @@ private fun ContextRow(
     onClick: () -> Unit,
     isDayMode: Boolean = false
 ) {
-    val finalTint = if (isDayMode) {
-        if (tint == Color(0xFF884444)) {
-            tint
-        } else if (tint == Color(0xFF777777)) {
-            Color(0xFF888888)
-        } else {
-            Color(0xFF111111)
-        }
-    } else {
-        tint
-    }
+    val finalTint = tint
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -687,11 +694,10 @@ internal fun WidgetResizeDialog(
     val selectionText = if (isDayMode) Color.White else Color.Black
     val actionColors = ButtonDefaults.textButtonColors(contentColor = selectionColor)
     val density = LocalDensity.current
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        // A Dialog creates another Android window, so provide the launcher's scale inside it.
+    Box {
         CompositionLocalProvider(LocalDensity provides density) {
             Surface(
-                modifier = Modifier.padding(24.dp).widthIn(max = 560.dp).fillMaxWidth(),
+                modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp), color = dialogBg, contentColor = dialogText
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -781,7 +787,7 @@ private fun WidgetLibraryDialog(
                 )
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
-                    Icon(Icons.Default.Close, null, tint = closeColor, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Rounded.Close, null, tint = closeColor, modifier = Modifier.size(14.dp))
                 }
             }
 

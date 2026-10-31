@@ -167,8 +167,23 @@ class VehicleMediaIntegrationTest {
                 first.setPlaybackState(state(PlaybackState.STATE_PAUSED))
                 second.setPlaybackState(state(PlaybackState.STATE_PLAYING))
                 awaitCondition { MediaListenerService.nowPlaying.value?.title == "Spotify-style track" }
+                val cover = MediaListenerService.nowPlaying.value!!.albumArt
+                repeat(3) {
+                    second.setMetadata(metadata("Spotify-style track", AndroidColor.GREEN))
+                    Thread.sleep(200)
+                    instrumentation.waitForIdleSync()
+                    assertSame("Repeated identical cover must retain its bitmap identity", cover, MediaListenerService.nowPlaying.value?.albumArt)
+                }
+                second.setMetadata(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, "Spotify-style track")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "Fixture artist").build())
+                Thread.sleep(200)
+                instrumentation.waitForIdleSync()
+                assertSame("A temporary missing cover must not flash the image away", cover, MediaListenerService.nowPlaying.value?.albumArt)
                 second.setMetadata(metadata("Spotify-style track", AndroidColor.BLUE))
                 awaitCondition { MediaListenerService.nowPlaying.value?.albumArt?.getPixel(0, 0) == AndroidColor.BLUE }
+                second.setMetadata(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, "Next track without artwork").build())
+                awaitCondition { MediaListenerService.nowPlaying.value?.title == "Next track without artwork" }
+                assertNull("The previous track's cover must not leak into a new track", MediaListenerService.nowPlaying.value?.albumArt)
                 second.release()
                 awaitCondition { MediaListenerService.nowPlaying.value?.title == "First track" }
             } finally { first.release(); second.release() }
