@@ -35,7 +35,13 @@ These are local simulated states and never issue vehicle commands. A future
 vehicle adapter can replace complete snapshots through the repository.
 
 Widget settings use the existing in-window `WidgetOverlay`, with a short reveal
-animation and no reserved content row. The three-dot controls overlay each card.
+animation and no reserved content row. The host covers the entire Home pane,
+including its header and grid padding, so the scrim reaches the navigation and
+climate boundaries. Menus remain centred on the actual card bounds and keep a
+12 dp inset from the pane edges. The three-dot controls overlay each card.
+Resize windows measure their width from text and chip contents; rectangular
+sizes use one row per height. Whole rows scroll horizontally if needed and the
+window scrolls vertically on short screens or at large UI/text scales.
 The Now Playing menu also owns its source selector and projection launches.
 Widget internals remain a separate design pass.
 
